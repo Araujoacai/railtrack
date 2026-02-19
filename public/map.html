@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RealTrack – Mapa ao Vivo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body class="map-page">
+
+    <!-- ── Mapa ── -->
+    <div id="map"></div>
+
+    <!-- ── Painel lateral ── -->
+    <div class="side-panel" id="sidePanel">
+        <div class="panel-header">
+            <div class="panel-logo">📍 RealTrack</div>
+            <button class="panel-toggle" id="panelToggle" onclick="togglePanel()" title="Recolher painel">◀</button>
+        </div>
+
+        <!-- Código da sala -->
+        <div class="room-code-box">
+            <div class="room-code-label">Código da sala</div>
+            <div class="room-code-value" id="roomCodeDisplay">------</div>
+            <button class="btn-copy" id="btnCopy" onclick="copyCode()">📋 Copiar</button>
+        </div>
+
+        <!-- Status GPS -->
+        <div class="gps-status" id="gpsStatus">
+            <div class="gps-dot" id="gpsDot"></div>
+            <span id="gpsText">Aguardando GPS...</span>
+        </div>
+
+        <!-- Usuários -->
+        <div class="users-section">
+            <div class="section-title">Usuários na sala <span class="user-count" id="userCount">0</span></div>
+            <div class="users-list" id="usersList"></div>
+        </div>
+
+        <!-- Chat -->
+        <div class="chat-section">
+            <div class="section-title">Chat</div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input-row">
+                <input type="text" id="chatInput" placeholder="Mensagem..." maxlength="200"
+                    onkeydown="if(event.key==='Enter') sendMessage()" />
+                <button onclick="sendMessage()">➤</button>
+            </div>
+        </div>
+
+        <!-- Botão sair -->
+        <button class="btn-leave" onclick="leaveRoom()">🚪 Sair da sala</button>
+    </div>
+
+    <!-- ── Botão flutuante (painel recolhido) ── -->
+    <button class="fab-panel" id="fabPanel" onclick="togglePanel()" style="display:none" title="Abrir painel">☰</button>
+
+    <!-- ── Botão centralizar ── -->
+    <button class="fab-center" onclick="centerMap()" title="Centralizar no meu local">🎯</button>
+
+    <!-- ── Toast de notificações ── -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ── Modal de permissão GPS ── -->
+    <div class="modal-overlay" id="gpsModal">
+        <div class="modal-box">
+            <div class="modal-icon">📡</div>
+            <h2>Permissão de GPS</h2>
+            <p>Para compartilhar sua localização em tempo real, precisamos acessar o GPS do seu dispositivo.</p>
+            <p class="modal-note">Sua localização será compartilhada apenas com os usuários desta sala.</p>
+            <button class="btn-primary" onclick="requestGPS()">✅ Permitir GPS</button>
+            <button class="btn-secondary" onclick="denyGPS()">❌ Não permitir</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/map.js"></script>
+</body>
+
+</html>

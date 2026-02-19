@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RealTrack – Compartilhe sua Localização</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="login-page">
+
+  <!-- Background animado -->
+  <div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <div class="login-container">
+    <!-- Logo -->
+    <div class="logo">
+      <div class="logo-icon">📍</div>
+      <h1>RealTrack</h1>
+      <p>Compartilhe sua localização em tempo real</p>
+    </div>
+
+    <!-- Card de login -->
+    <div class="card" id="loginCard">
+
+      <!-- Avatar -->
+      <div class="avatar-section">
+        <div class="avatar-preview" id="avatarPreview">
+          <span id="avatarEmoji">😊</span>
+        </div>
+        <div class="avatar-emojis">
+          <span class="emoji-opt" onclick="selectEmoji(this)" data-emoji="😊">😊</span>
+          <span class="emoji-opt" onclick="selectEmoji(this)" data-emoji="🧑">🧑</span>
+          <span class="emoji-opt" onclick="selectEmoji(this)" data-emoji="👩">👩</span>
+          <span class="emoji-opt" onclick="selectEmoji(this)" data-emoji="🧔">🧔</span>
+          <span class="emoji-opt" onclick="selectEmoji(this)" data-emoji="👦">👦</span>
+          <span class="emoji-opt" onclick="selectEmoji(this)" data-emoji="👧">👧</span>
+          <span class="emoji-opt" onclick="selectEmoji(this)" data-emoji="🐶">🐶</span>
+          <span class="emoji-opt" onclick="selectEmoji(this)" data-emoji="🦊">🦊</span>
+          <span class="emoji-opt" onclick="selectEmoji(this)" data-emoji="🐱">🐱</span>
+          <span class="emoji-opt" onclick="selectEmoji(this)" data-emoji="🚀">🚀</span>
+        </div>
+      </div>
+
+      <!-- Nome -->
+      <div class="form-group">
+        <label for="username">Seu nome</label>
+        <input
+          type="text"
+          id="username"
+          placeholder="Como quer ser chamado?"
+          maxlength="20"
+          autocomplete="off"
+        />
+      </div>
+
+      <!-- Tabs: Criar / Entrar -->
+      <div class="tabs">
+        <button class="tab active" id="tabCreate" onclick="switchTab('create')">Criar Sala</button>
+        <button class="tab" id="tabJoin" onclick="switchTab('join')">Entrar em Sala</button>
+      </div>
+
+      <!-- Criar sala -->
+      <div id="panelCreate" class="tab-panel">
+        <p class="hint">Uma sala será criada e você receberá um código para compartilhar.</p>
+        <button class="btn-primary" onclick="createRoom()">
+          <span>🗺️</span> Criar nova sala
+        </button>
+      </div>
+
+      <!-- Entrar em sala -->
+      <div id="panelJoin" class="tab-panel hidden">
+        <div class="form-group">
+          <label for="roomCode">Código da sala</label>
+          <input
+            type="text"
+            id="roomCode"
+            placeholder="Ex: ABC123"
+            maxlength="6"
+            autocomplete="off"
+            oninput="this.value = this.value.toUpperCase()"
+          />
+        </div>
+        <button class="btn-primary" onclick="joinRoom()">
+          <span>🔗</span> Entrar na sala
+        </button>
+      </div>
+
+      <!-- Mensagem de erro -->
+      <div class="error-msg hidden" id="errorMsg"></div>
+    </div>
+
+    <p class="footer-note">Nenhuma conta necessária · Gratuito · Open Source</p>
+  </div>
+
+  <script src="js/login.js"></script>
+</body>
+</html>
