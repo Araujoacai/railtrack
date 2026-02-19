@@ -12,6 +12,7 @@ let watchId = null;
 let gpsGranted = false;
 let panelOpen = true;
 let isHost = false;
+let initialCenterDone = false;  // Centraliza apenas uma vez
 
 const markers = {};   // socketId -> L.marker
 const routes = {};    // socketId -> L.polyline (trilha percorrida)
@@ -271,9 +272,10 @@ function onLocationSuccess(pos) {
 
     socket.emit('update_location', { lat, lng, accuracy, heading, speed });
 
-    // Centralizar no primeiro fix
-    if (!myUser?.location) {
+    // Centralizar apenas no primeiro fix de GPS
+    if (!initialCenterDone) {
         map.setView([lat, lng], 16);
+        initialCenterDone = true;
     }
 
     // Recalcular rota se há destino (a cada 10 segundos)
