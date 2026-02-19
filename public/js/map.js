@@ -102,24 +102,51 @@ function initSocket() {
         mySocketId = socket.id;
         console.log('Conectado, ID:', mySocketId);
 
-        // Recuperar sessão anterior se existir
-        const saved = JSON.parse(localStorage.getItem('realtrack_user') || '{}');
-        const userId = saved.userId || crypto.randomUUID(); // Gerar se não existir
+        // Ler dados da sessão atual (vindo do login.js)
+        const username = sessionStorage.getItem('username');
+        const avatar = sessionStorage.getItem('avatar');
+        const action = sessionStorage.getItem('action');
+        const code = sessionStorage.getItem('roomCode');
 
-        // Salvar userId se foi gerado agora
+        // Ler (ou gerar) userId persistente
+        const saved = JSON.parse(localStorage.getItem('realtrack_user') || '{}');
+        const userId = saved.userId || crypto.randomUUID();
         if (!saved.userId) {
             localStorage.setItem('realtrack_user', JSON.stringify({ ...saved, userId }));
         }
 
-        if (saved.lastRoom && (Date.now() - (saved.lastRoomTime || 0)) < 5 * 60 * 60 * 1000) {
-            // Tentar reconectar
-            socket.emit('join_room', {
-                code: saved.lastRoom,
-                username: saved.username,
-                avatar: saved.avatar,
-                userId: userId // Enviar userId
-            });
+        if (!username || !avatar) {
+            // Sem sessão de login – tentar auto-reconnect via localStorage
+            if (saved.lastRoom && (Date.now() - (saved.lastRoomTime || 0)) < 5 * 60 * 60 * 1000) {
+                socket.emit('join_room', {
+                    code: saved.lastRoom,
+                    username: saved.username || 'Usuário',
+                    avatar: saved.avatar || '😊',
+                    userId,
+                });
+            } else {
+                // Sem dados → redirecionar para login
+                window.location.href = '/';
+            }
+            return;
         }
+
+        // Sessão válida: criar ou entrar em sala
+        if (action === 'create') {
+            socket.emit('create_room', { username, avatar, userId });
+        } else if (action === 'join' && code) {
+            socket.emit('join_room', { code, username, avatar, userId });
+        }
+    });
+
+    // Sala criada
+    socket.on('room_created', (data) => {
+        roomCode = data.code;
+        myUser = data.user;
+        isHost = data.isHost;
+        saveLastRoom(roomCode);
+        onRoomReady(data.users, data.destination);
+        showToast('🎉 Sala criada! Código: ' + data.code, 'success');
     });
 
     // Entrou em sala
