@@ -34,11 +34,26 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         joinPanel.appendChild(hint);
     }
+
+    // Garantir UUID único
+    if (!saved.userId) {
+        const userId = crypto.randomUUID();
+        saveUserData(saved.username, saved.avatar, userId);
+    }
 });
 
-function saveUserData(username, avatar) {
+function saveUserData(username, avatar, userId) {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, username, avatar }));
+    const data = { ...saved };
+    if (username) data.username = username;
+    if (avatar) data.avatar = avatar;
+    if (userId) data.userId = userId;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function getUserId() {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    return saved.userId;
 }
 
 function saveLastRoom(code) {
@@ -91,11 +106,13 @@ async function createRoom() {
     const username = getUsername();
     if (!username) return;
 
-    saveUserData(username, selectedEmoji);
+    const userId = getUserId();
+    saveUserData(username, selectedEmoji, userId);
 
-    // Salvar dados na sessão (ainda necessário para o map.js ler initially)
+    // Salvar dados na sessão
     sessionStorage.setItem('username', username);
     sessionStorage.setItem('avatar', selectedEmoji);
+    sessionStorage.setItem('userId', userId); // Identidade única
     sessionStorage.setItem('action', 'create');
 
     const base = `${location.protocol}//${location.host}`;
@@ -114,7 +131,8 @@ async function joinRoom() {
         return;
     }
 
-    saveUserData(username, selectedEmoji);
+    const userId = getUserId();
+    saveUserData(username, selectedEmoji, userId);
 
     // Verificar se sala existe (se falhar, deixa o servidor decidir)
     try {
@@ -132,6 +150,7 @@ async function joinRoom() {
     saveLastRoom(code);
     sessionStorage.setItem('username', username);
     sessionStorage.setItem('avatar', selectedEmoji);
+    sessionStorage.setItem('userId', userId); // Identidade única
     sessionStorage.setItem('action', 'join');
     sessionStorage.setItem('roomCode', code);
 

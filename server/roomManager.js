@@ -105,25 +105,52 @@ class RoomManager {
         return COLORS[Math.floor(Math.random() * COLORS.length)];
     }
 
-    addUser(code, socketId, username, avatar) {
-        const room = this.rooms.get(code);
-        if (!room) return null;
-        if (room.users.size >= MAX_USERS_PER_ROOM) return null; // Limite de usuários
+    addUser(code, socketId, username, avatar, userId) {
+        if (!this.rooms.has(code)) return null;
 
-        const color = this.assignColor(code);
+        const room = this.rooms.get(code);
+
+        // Verificar se usuário já existe pelo userId (reconectar)
+        let existingUser = null;
+        if (userId) {
+            for (const [sid, u] of room.users.entries()) {
+                if (u.userId === userId) {
+                    existingUser = { sid, user: u };
+                    break;
+                }
+            }
+        }
+
+        // Limite de usuários
+        if (room.users.size >= MAX_USERS_PER_ROOM && !existingUser) return null;
+
+        const color = existingUser ? existingUser.user.color : this.assignColor(code);
+
+        // Se encontrou usuário antigo, remover socket antigo e atualiza para o novo
+        if (existingUser) {
+            room.users.delete(existingUser.sid);
+        }
+
         const user = {
-            socketId,
+            socketId, // Keep socketId as the primary identifier in the map
             username,
             avatar,
             color,
-            location: null,
-            route: [],
-            joinedAt: Date.now(),
+            location: existingUser ? existingUser.user.location : null, // Manter localização se possível, ou null
+            route: existingUser ? existingUser.user.route : [], // Manter rota se possível
+            joinedAt: existingUser ? existingUser.user.joinedAt : Date.now(), // Manter data de entrada
             online: true,
+            userId: userId // Guardar para futuro
         };
+
         room.users.set(socketId, user);
-        // Primeiro usuário é o host
-        if (!room.host) room.host = socketId;
+        room.lastActivity = Date.now();
+
+        // Se a sala não tinha host ou o host era o socket antigo, atualizar
+        if (!room.host || (existingUser && room.host === existingUser.sid)) {
+            room.host = socketId;
+        }
+
         return user;
     }
 

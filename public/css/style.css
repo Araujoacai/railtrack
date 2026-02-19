@@ -915,6 +915,49 @@ body {
 }
 
 /* Marcadores do mapa */
+.custom-marker-container {
+  background: none !important;
+  border: none !important;
+}
+
+.user-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid #FFF;
+  font-size: 22px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  transition: transform 0.2s linear;
+  /* Rotação suave */
+  position: relative;
+}
+
+/* Seta de direção (Bússola) */
+.marker-arrow {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 8px solid #FFF;
+}
+
+.user-emoji {
+  transition: transform 0.2s linear;
+  /* Manter emoji em pé */
+}
+
+/* Animação de pulso (apenas para mim) */
+.my-marker {
+  animation: pulse-marker 2s ease-in-out infinite;
+}
+
 .custom-marker {
   display: flex;
   align-items: center;
@@ -932,10 +975,6 @@ body {
 
 .custom-marker:hover {
   transform: scale(1.2);
-}
-
-.my-marker {
-  animation: pulse-marker 2s ease-in-out infinite;
 }
 
 @keyframes pulse-marker {

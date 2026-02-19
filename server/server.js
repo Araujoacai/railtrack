@@ -164,8 +164,14 @@ app.get('/api/stats', (req, res) => {
 io.on('connection', (socket) => {
     console.log(`[+] Conectado: ${socket.id}`);
 
+    // Rate limiter para conexão
+    if (!checkRateLimit(socket.id, 'connect', 10)) {
+        socket.disconnect();
+        return;
+    }
+
     // ── Criar sala ──────────────────────────────────────────
-    socket.on('create_room', ({ username, avatar }) => {
+    socket.on('create_room', ({ username, avatar, userId }) => {
         try {
             // Impedir múltiplas salas
             if (socket.data.roomCode) {
@@ -196,7 +202,7 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            const user = roomManager.addUser(code, socket.id, cleanName, avatar);
+            const user = roomManager.addUser(code, socket.id, cleanName, avatar, userId);
             socket.join(code);
             socket.data.roomCode = code;
 
@@ -215,7 +221,7 @@ io.on('connection', (socket) => {
     });
 
     // ── Entrar em sala ──────────────────────────────────────
-    socket.on('join_room', ({ code, username, avatar }) => {
+    socket.on('join_room', ({ code, username, avatar, userId }) => {
         // Impedir múltiplas salas
         if (socket.data.roomCode) {
             socket.emit('error', { message: 'Você já está em uma sala.' });
