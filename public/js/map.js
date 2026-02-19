@@ -714,15 +714,8 @@ function updateUserOnMap(socketId, user) {
 
         // Follow Me (Suave) - Apenas se for eu e estiver navegando
         if (socketId === mySocketId && isNavigating) {
-            const currentCenter = map.getCenter();
-            const dist = map.distance(currentCenter, newLatLng);
-
-            // Panorâmica suave para distâncias curtas, ou pulo para longas
-            if (dist < 100) {
-                map.panTo(newLatLng, { animate: true, duration: 0.5 });
-            } else {
-                map.setView(newLatLng, 18);
-            }
+            // Sempre panTo (sem recarregar tiles) para evitar flash no mobile
+            map.panTo(newLatLng, { animate: true, duration: 0.8, easeLinearity: 0.25 });
         }
 
     } else {

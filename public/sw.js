@@ -1,6 +1,5 @@
-const CACHE_NAME = 'realtrack-v4';
-// Apenas recursos locais no cache de instalação (muito mais seguro com CSP)
-const ASSETS = [
+const CACHE_NAME = 'realtrack-v5';
+const STATIC_ASSETS = [
     '/',
     '/index.html',
     '/map.html',
@@ -14,17 +13,13 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-    self.skipWaiting(); // Ativar imediatamente sem aguardar aba antiga fechar
+    self.skipWaiting();
     e.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            // addAll faz fetch de cada item; só colocamos locais para evitar CSP
-            return cache.addAll(ASSETS);
-        })
+        caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
     );
 });
 
 self.addEventListener('activate', (e) => {
-    // Limpar caches antigos
     e.waitUntil(
         caches.keys().then((keys) =>
             Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
@@ -36,14 +31,32 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
     const url = new URL(e.request.url);
 
-    // Ignorar requisições de origens externas (Google Fonts, Leaflet CDN, etc.)
-    // Deixamos elas irem direto à rede, sem interceptar
+    // Ignorar requisições externas — deixar o browser lidar
     if (url.origin !== self.location.origin) {
-        return; // Não chama e.respondWith() — deixa o browser lidar normalmente
+        return;
     }
 
-    // Apenas recursos locais: Cache first, fallback à rede
-    e.respondWith(
-        caches.match(e.request).then((cached) => cached || fetch(e.request))
-    );
+    const isJsOrHtml = url.pathname.endsWith('.js')
+        || url.pathname.endsWith('.html')
+        || url.pathname === '/'
+        || url.pathname.startsWith('/map');
+
+    if (isJsOrHtml) {
+        // Network First para JS e HTML: sempre tenta a rede primeiro
+        // Garante que atualizações de código apareçam imediatamente
+        e.respondWith(
+            fetch(e.request)
+                .then((networkResp) => {
+                    const clone = networkResp.clone();
+                    caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
+                    return networkResp;
+                })
+                .catch(() => caches.match(e.request)) // offline fallback
+        );
+    } else {
+        // Cache First para CSS, imagens, etc.
+        e.respondWith(
+            caches.match(e.request).then((cached) => cached || fetch(e.request))
+        );
+    }
 });
