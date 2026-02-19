@@ -733,7 +733,7 @@ async function fetchSpeedCameras(bounds) {
 
         const bbox = `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
 
-        const url = `https://api.tomtom.com/traffic/services/5/incidentDetails?key=${TOMTOM_KEY}&bbox=${bbox}&categoryFilter=14&language=pt-BR`;
+        const url = `https://api.tomtom.com/traffic/services/5/incidentDetails?key=${TOMTOM_KEY}&bbox=${bbox}&categoryFilter=14`;
 
         const res = await fetch(url);
         if (!res.ok) {
