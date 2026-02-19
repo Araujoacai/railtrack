@@ -295,27 +295,92 @@ function initSocket(username, avatar) {
 }
 
 // ── Sala pronta ──────────────────────────────────────────────
-function onRoomReady(users, dest) {
-    document.getElementById('roomCodeDisplay').textContent = roomCode;
-    document.title = `RealTrack – Sala ${roomCode}`;
+// ── GPS ──────────────────────────────────────────────────────
+function showGPSModal() {
+    document.getElementById('gpsModal').classList.remove('hidden');
+}
 
-    users.forEach(user => {
-        addOrUpdateUserInList(user);
-        if (user.location) {
-            updateUserOnMap(user.socketId, user);
-        }
-    });
+function requestGPS() {
+    document.getElementById('gpsModal').classList.add('hidden');
 
-    updateUserCount();
-    updateNavUI();
-
-    // Se já há destino definido, mostrar
-    if (dest) {
-        destination = dest;
-        showDestinationOnMap(dest);
+    if (!navigator.geolocation) {
+        setGPSStatus('error', '❌ GPS não suportado neste dispositivo');
+        return;
     }
 
-    showGPSModal();
+    setGPSStatus('waiting', '⏳ Aguardando GPS...');
+
+    watchId = navigator.geolocation.watchPosition(
+        onLocationSuccess,
+        onLocationError,
+        {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 3000,
+        }
+    );
+}
+
+function denyGPS() {
+    document.getElementById('gpsModal').classList.add('hidden');
+    setGPSStatus('error', '📍 GPS desativado – apenas visualizando');
+    showToast('⚠️ Sem GPS: você pode ver outros, mas não será visto.', 'info');
+}
+
+function onLocationSuccess(pos) {
+    gpsGranted = true;
+    const { latitude: lat, longitude: lng, accuracy, heading, speed } = pos.coords;
+
+    setGPSStatus('active', `📡 GPS ativo · ±${Math.round(accuracy)}m`);
+
+    myLastLat = lat;
+    myLastLng = lng;
+
+    socket.emit('update_location', { lat, lng, accuracy, heading, speed });
+
+    // Centralizar apenas no primeiro fix de GPS
+    if (!initialCenterDone) {
+        map.setView([lat, lng], 18);
+        initialCenterDone = true;
+    }
+}
+
+function onLocationError(err) {
+    const msgs = {
+        1: '❌ Permissão de GPS negada',
+        2: '❌ Posição indisponível',
+        3: '⏱️ Timeout do GPS',
+    };
+    setGPSStatus('error', msgs[err.code] || '❌ Erro de GPS');
+    showToast(`GPS: ${msgs[err.code]}`, 'error');
+}
+
+function setGPSStatus(state, text) {
+    const dot = document.getElementById('gpsDot');
+    const label = document.getElementById('gpsText');
+    dot.className = 'gps-dot';
+    if (state === 'active') dot.classList.add('active');
+    if (state === 'error') dot.classList.add('error');
+    label.textContent = text;
+}
+
+users.forEach(user => {
+    addOrUpdateUserInList(user);
+    if (user.location) {
+        updateUserOnMap(user.socketId, user);
+    }
+});
+
+updateUserCount();
+updateNavUI();
+
+// Se já há destino definido, mostrar
+if (dest) {
+    destination = dest;
+    showDestinationOnMap(dest);
+}
+
+showGPSModal();
 }
 
 function updateNavUI() {
