@@ -1,104 +1,34 @@
-/**
- * map.js – Lógica principal do mapa em tempo real + Navegação
- */
 
-// ── Estado Global ────────────────────────────────────────────
-let map;
-let socket;
-let mySocketId;
-let myUser;
-let roomCode;
+// Estado Global
+let map, myUser, roomCode, isHost;
+let mySocketId = null;
+let markers = {}; // socketId -> Marker (Leaflet)
+let routes = {}; // socketId -> Polyline
+let routePoints = {}; // socketId -> [[lat,lng], ...]
+let destination = null; // {lat, lng, name}
+let navRouteLine = null; // Linha da rota OSRM
 let watchId = null;
+let myLastLat = null, myLastLng = null;
+let lastRouteCalc = 0;
 let gpsGranted = false;
-let panelOpen = true;
-let isHost = false;
-let initialCenterDone = false;  // Centraliza apenas uma vez
-
-const markers = {};   // socketId -> L.marker
-const routes = {};    // socketId -> L.polyline (trilha percorrida)
-const routePoints = {}; // socketId -> [[lat,lng], ...]
-
-// ── Navegação ────────────────────────────────────────────────
-let destination = null;       // { lat, lng, name }
-let destMarker = null;        // L.marker do destino
-let navRouteLine = null;      // L.polyline da rota de navegação
-let navSteps = [];            // Instruções turn-by-turn
-let lastRouteCalc = 0;        // Timestamp do último cálculo
-let myLastLat = null;
-let myLastLng = null;
-let settingDestByClick = false; // Modo de clique no mapa
-
-// ── Overpass API (OpenStreetMap) – Radares e Pedágios ──────
-let overpassEnabled = true;
-let speedCamMarkers = [];     // Array de L.marker para radares
-let tollMarkers = [];         // Array de L.marker para pedágios
-let lastOverpassFetch = 0;    // Debounce
-
-// ── Inicialização ────────────────────────────────────────────
-let myUsername, myAvatar, myUserId, action;
-
-document.addEventListener('DOMContentLoaded', () => {
-    myUsername = sessionStorage.getItem('username');
-    myAvatar = sessionStorage.getItem('avatar');
-    myUserId = sessionStorage.getItem('userId');
-    action = sessionStorage.getItem('action');
-    roomCode = sessionStorage.getItem('roomCode');
-
-    // Se não tiver ID (sessão antiga), tenta gerar ou pegar do local
-    if (!myUserId) {
-        const saved = JSON.parse(localStorage.getItem('realtrack_user') || '{}');
-        myUserId = saved.userId || crypto.randomUUID();
-        sessionStorage.setItem('userId', myUserId);
-    }
-
-    if (!myUsername || !myAvatar || !action) {
-        window.location.href = '/';
-        return;
-    }
-
-    initMap();
-    initSocket(myUsername, myAvatar, action);
-    registerServiceWorker();
-    requestWakeLock();
-
-    // Bússola
-    if (window.DeviceOrientationEvent) {
-        window.addEventListener('deviceorientation', (event) => {
-            if (event.alpha !== null) {
-                // Android: alpha cresce no sentido anti-horário (0=N, 90=E, 180=S, 270=W)
-                const heading = event.webkitCompassHeading || (360 - event.alpha);
-                updateMyMarkerHeading(heading);
-            }
-        });
-    }
-});
-
-function updateMyMarkerHeading(heading) {
-    if (!socket || !socket.id || !markers[socket.id]) return;
-
-    const myMarker = markers[socket.id];
-    const el = myMarker.getElement();
-    if (el) {
-        const markerDiv = el.querySelector('.user-marker');
-        const emojiDiv = el.querySelector('.user-emoji');
-        if (markerDiv) markerDiv.style.transform = `rotate(${heading}deg)`;
-        if (emojiDiv) emojiDiv.style.transform = `rotate(${-heading}deg)`; // Manter emoji em pé
-    }
-}
-
-// ── PWA & Wake Lock ──────────────────────────────────────────
-async function registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        try {
-            await navigator.serviceWorker.register('/sw.js');
-            console.log('SW registrado');
-        } catch (e) {
-            console.log('SW falhou', e);
-        }
-    }
-}
-
 let wakeLock = null;
+let initialCenterDone = false; // Add this line
+const socket = io();
+
+// Overpass API (Radares e Pedágios)
+let overpassEnabled = false;
+let speedCamMarkers = [];
+let tollMarkers = [];
+let lastOverpassFetch = 0;
+
+// Estado da UI
+let panelOpen = false;
+let settingDestByClick = false;
+
+// Controle de Navegação
+let isNavigating = false;
+
+
 async function requestWakeLock() {
     try {
         if ('wakeLock' in navigator) {
@@ -138,63 +68,58 @@ function initMap() {
     // Clique no mapa para definir destino (apenas host)
     map.on('click', onMapClick);
 
-    // Buscar radares/pedágios ao mover o mapa
-    map.on('moveend', onMapMoveEnd);
-}
+    // Ajustar mapa quando redimensionar
+    setTimeout(() => map.invalidateSize(), 500);
 
-function onMapMoveEnd() {
-    if (!overpassEnabled) return;
-    if (Date.now() - lastOverpassFetch < 5000) return; // Debounce 5s
-    fetchOverpassData();
+    // Inicializar controles de Overpass
+    initOverpassControls();
 }
 
 function onMapClick(e) {
-    if (!isHost) return;
-    if (!settingDestByClick) return;
+    if (!isHost || !settingDestByClick) return;
+
+    settingDestByClick = false;
+    document.getElementById('navHint').textContent = '';
+    map.getContainer().style.cursor = '';
 
     const { lat, lng } = e.latlng;
 
-    // Geocoding reverso para obter o nome do local
-    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`)
-        .then(r => r.json())
+    // Reverse Geocoding (Nominatim) para pegar nome da rua
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+        .then(res => res.json())
         .then(data => {
-            const name = data.display_name ? data.display_name.split(',').slice(0, 3).join(',') : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            const name = data.display_name ? data.display_name.split(',')[0] : 'Destino Selecionado';
             socket.emit('set_destination', { lat, lng, name });
         })
         .catch(() => {
-            socket.emit('set_destination', { lat, lng, name: `${lat.toFixed(4)}, ${lng.toFixed(4)}` });
+            socket.emit('set_destination', { lat, lng, name: 'Destino no Mapa' });
         });
-
-    settingDestByClick = false;
-    document.getElementById('navHint').textContent = 'Ou clique no mapa para definir o destino.';
-    map.getContainer().style.cursor = '';
 }
 
 // ── Socket.IO ────────────────────────────────────────────────
-function initSocket(username, avatar) {
-    socket = io();
-
+function initSocket() {
     socket.on('connect', () => {
-        console.log('Conectado:', socket.id);
         mySocketId = socket.id;
+        console.log('Conectado, ID:', mySocketId);
 
-        // Entrar ou Criar sala com userId único
-        if (action === 'create') {
-            socket.emit('create_room', { username, avatar, userId: myUserId });
-        } else if (action === 'join' && roomCode) {
-            socket.emit('join_room', { code: roomCode, username, avatar, userId: myUserId });
-            document.getElementById('roomCodeDisplay').textContent = roomCode;
+        // Recuperar sessão anterior se existir
+        const saved = JSON.parse(localStorage.getItem('realtrack_user') || '{}');
+        const userId = saved.userId || crypto.randomUUID(); // Gerar se não existir
+
+        // Salvar userId se foi gerado agora
+        if (!saved.userId) {
+            localStorage.setItem('realtrack_user', JSON.stringify({ ...saved, userId }));
         }
-    });
 
-    // Sala criada
-    socket.on('room_created', (data) => {
-        roomCode = data.code;
-        myUser = data.user;
-        isHost = data.isHost;
-        saveLastRoom(roomCode); // Persistir sala
-        onRoomReady(data.users, data.destination);
-        showToast('🎉 Sala criada com sucesso!', 'success');
+        if (saved.lastRoom && (Date.now() - (saved.lastRoomTime || 0)) < 5 * 60 * 60 * 1000) {
+            // Tentar reconectar
+            socket.emit('join_room', {
+                code: saved.lastRoom,
+                username: saved.username,
+                avatar: saved.avatar,
+                userId: userId // Enviar userId
+            });
+        }
     });
 
     // Entrou em sala
@@ -214,7 +139,6 @@ function initSocket(username, avatar) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, lastRoom: code, lastRoomTime: Date.now() }));
     }
 
-    // Aviso de GPS em Background
     // Aviso de GPS em Background
     document.addEventListener('visibilitychange', () => {
         if (document.hidden && gpsGranted) {
@@ -295,78 +219,27 @@ function initSocket(username, avatar) {
 }
 
 // ── Sala pronta ──────────────────────────────────────────────
-// ── GPS ──────────────────────────────────────────────────────
-function showGPSModal() {
-    document.getElementById('gpsModal').classList.remove('hidden');
-}
+function onRoomReady(users, dest) {
+    document.getElementById('roomCodeDisplay').textContent = roomCode;
+    document.title = `RealTrack – Sala ${roomCode}`;
 
-function requestGPS() {
-    document.getElementById('gpsModal').classList.add('hidden');
-
-    if (!navigator.geolocation) {
-        setGPSStatus('error', '❌ GPS não suportado neste dispositivo');
-        return;
-    }
-
-    setGPSStatus('waiting', '⏳ Aguardando GPS...');
-
-    watchId = navigator.geolocation.watchPosition(
-        onLocationSuccess,
-        onLocationError,
-        {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 3000,
+    users.forEach(user => {
+        addOrUpdateUserInList(user);
+        if (user.location) {
+            updateUserOnMap(user.socketId, user);
         }
-    );
-}
+    });
 
-function denyGPS() {
-    document.getElementById('gpsModal').classList.add('hidden');
-    setGPSStatus('error', '📍 GPS desativado – apenas visualizando');
-    showToast('⚠️ Sem GPS: você pode ver outros, mas não será visto.', 'info');
-}
+    updateUserCount();
+    updateNavUI();
 
-function onLocationSuccess(pos) {
-    gpsGranted = true;
-    const { latitude: lat, longitude: lng, accuracy, heading, speed } = pos.coords;
-
-    setGPSStatus('active', `📡 GPS ativo · ±${Math.round(accuracy)}m`);
-
-    myLastLat = lat;
-    myLastLng = lng;
-
-    socket.emit('update_location', { lat, lng, accuracy, heading, speed });
-
-    // Centralizar apenas no primeiro fix de GPS
-    if (!initialCenterDone) {
-        map.setView([lat, lng], 18);
-        initialCenterDone = true;
+    // Se já há destino definido, mostrar
+    if (dest) {
+        destination = dest;
+        showDestinationOnMap(dest);
     }
-}
 
-function onLocationError(err) {
-    const msgs = {
-        1: '❌ Permissão de GPS negada',
-        2: '❌ Posição indisponível',
-        3: '⏱️ Timeout do GPS',
-    };
-    setGPSStatus('error', msgs[err.code] || '❌ Erro de GPS');
-    showToast(`GPS: ${msgs[err.code]}`, 'error');
-    showToast(`GPS: ${msgs[err.code]}`, 'error');
-}
-
-function setGPSStatus(state, text) {
-    const dot = document.getElementById('gpsDot');
-    const label = document.getElementById('gpsText');
-    if (!dot || !label) return;
-
-    dot.className = 'gps-dot';
-    if (state === 'active') dot.classList.add('active');
-    if (state === 'error') dot.classList.add('error');
-    label.textContent = text;
-}
-
+    showGPSModal();
 }
 
 function updateNavUI() {
@@ -442,9 +315,28 @@ function onLocationSuccess(pos) {
     }
 }
 
-// ── Controle de Navegação ────────────────────────────────────
-let isNavigating = false;
+function onLocationError(err) {
+    const msgs = {
+        1: '❌ Permissão de GPS negada',
+        2: '❌ Posição indisponível',
+        3: '⏱️ Timeout do GPS',
+    };
+    setGPSStatus('error', msgs[err.code] || '❌ Erro de GPS');
+    showToast(`GPS: ${msgs[err.code]}`, 'error');
+}
 
+function setGPSStatus(state, text) {
+    const dot = document.getElementById('gpsDot');
+    const label = document.getElementById('gpsText');
+    if (!dot || !label) return;
+
+    dot.className = 'gps-dot';
+    if (state === 'active') dot.classList.add('active');
+    if (state === 'error') dot.classList.add('error');
+    label.textContent = text;
+}
+
+// ── Controle de Navegação ────────────────────────────────────
 function startNavigation() {
     isNavigating = true;
     const btn = document.querySelector('.fab-center');
@@ -465,12 +357,9 @@ function stopNavigation() {
 }
 
 // Detectar interação do usuário para pausar "Follow Me"
-map.on('dragstart', () => {
-    if (isNavigating) {
-        stopNavigation();
-        showToast('Navegação pausada. Toque em 🎯 para retomar.', 'info');
-    }
-});
+// Note: map is initialized in initMap, so we need to add listener there or wait
+// We can add it in initMap actually, or check map existence here
+// Moving listener to initMap or ensuring map exists
 
 function centerMap() {
     if (myLastLat && myLastLng) {
@@ -480,74 +369,32 @@ function centerMap() {
     }
 }
 
-function onLocationError(err) {
-    const msgs = {
-        1: '❌ Permissão de GPS negada',
-        2: '❌ Posição indisponível',
-        3: '⏱️ Timeout do GPS',
-    };
-    setGPSStatus('error', msgs[err.code] || '❌ Erro de GPS');
-    showToast(`GPS: ${msgs[err.code]}`, 'error');
-}
+// ── Bússola (Device Orientation) ─────────────────────────────
+window.addEventListener('deviceorientation', (event) => {
+    if (event.alpha !== null && myUser && myUser.socketId) {
+        // Alpha é a direção da bússola (0 = Norte)
+        // Precisamos inverter e compensar para CSS rotate
+        const heading = event.webkitCompassHeading || (360 - event.alpha);
+        updateMyMarkerHeading(heading);
+    }
+});
 
-function setGPSStatus(state, text) {
-    const dot = document.getElementById('gpsDot');
-    const label = document.getElementById('gpsText');
-    dot.className = 'gps-dot';
-    if (state === 'active') dot.classList.add('active');
-    if (state === 'error') dot.classList.add('error');
-    label.textContent = text;
-}
+function updateMyMarkerHeading(heading) {
+    // Atualiza visualmente e também pode enviar para o servidor se quisermos que outros vejam
+    // Por enquanto, apenas visual local
+    if (!mySocketId || !markers[mySocketId]) return;
 
-// ── Navegação: Destino no Mapa ───────────────────────────────
-function showDestinationOnMap(dest) {
-    // Remover marcador antigo
-    if (destMarker) map.removeLayer(destMarker);
-
-    const icon = L.divIcon({
-        html: '<div class="dest-marker-icon">📍</div>',
-        className: '',
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-        popupAnchor: [0, -32],
-    });
-
-    destMarker = L.marker([dest.lat, dest.lng], { icon })
-        .addTo(map)
-        .bindPopup(`<b>🎯 Destino</b><br>${escapeHTML(dest.name)}`, { className: 'dark-popup' });
-
-    // Mostrar painel de direções
-    document.getElementById('directionsSection').style.display = '';
-    document.getElementById('destInfo').innerHTML = `
-        <span>📍</span>
-        <span class="dest-name">${escapeHTML(dest.name)}</span>
-        <span class="dest-distance" id="destDistance">Calculando...</span>
-    `;
-
-    // Botão remover (host only)
-    if (isHost) {
-        document.getElementById('btnClearDest').style.display = '';
-        document.getElementById('navHint').style.display = 'none';
+    const marker = markers[mySocketId];
+    const el = marker.getElement();
+    if (el) {
+        const markerDiv = el.querySelector('.user-marker');
+        const emojiDiv = el.querySelector('.user-emoji');
+        if (markerDiv) markerDiv.style.transform = `rotate(${heading}deg)`;
+        if (emojiDiv) emojiDiv.style.transform = `rotate(${-heading}deg)`;
     }
 }
 
-function clearDestinationUI() {
-    destination = null;
-    if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
-    if (navRouteLine) { map.removeLayer(navRouteLine); navRouteLine = null; }
-    navSteps = [];
-
-    document.getElementById('directionsSection').style.display = 'none';
-    document.getElementById('directionsList').innerHTML = '';
-    document.getElementById('destInfo').innerHTML = '';
-
-    if (isHost) {
-        document.getElementById('btnClearDest').style.display = 'none';
-        document.getElementById('navHint').style.display = '';
-    }
-}
-
-// ── Navegação: OSRM Routing ─────────────────────────────────
+// ── OSRM Routing ─────────────────────────────────────────────
 // ── Utilitários de Ícone ─────────────────────────────────────
 function createUserIcon(avatar, color) {
     return L.divIcon({
@@ -664,55 +511,84 @@ function translateInstruction(step) {
 
     if (type === 'depart') return name ? `Siga por ${name}` : 'Inicie a viagem';
     if (type === 'arrive') return 'Você chegou ao destino!';
-    if (type === 'turn' || type === 'end of road') return name ? `Vire ${modText} em ${name}` : `Vire ${modText}`;
-    if (type === 'new name' || type === 'continue') return name ? `Continue por ${name}` : `Continue ${modText}`;
-    if (type === 'merge') return name ? `Entre em ${name}` : 'Mescle à via';
-    if (type === 'roundabout' || type === 'rotary') return name ? `Na rotatória, saia em ${name}` : 'Siga pela rotatória';
-    if (type === 'fork') return name ? `Pegue ${modText} em ${name}` : `Pegue ${modText}`;
-    if (type === 'on ramp') return name ? `Pegue a rampa para ${name}` : 'Pegue a rampa';
-    if (type === 'off ramp') return name ? `Saia pela rampa em ${name}` : 'Saia pela rampa';
+    if (type === 'roundabout' || type === 'rotary') return `Na rotatória, pegue a saída ${step.maneuver.exit}`;
 
-    return name ? `Siga por ${name}` : `Siga ${modText}`;
+    if (name) return `Vire ${modText} na ${name}`;
+    return `Vire ${modText}`;
 }
 
-// ── Navegação: Busca de Endereço (Nominatim) ─────────────────
-async function searchDestination() {
-    const input = document.getElementById('destSearch');
-    const query = input.value.trim();
-    if (!query) return;
+function showDestinationOnMap(dest) {
+    // Marcador de destino
+    const icon = L.divIcon({
+        html: '<div style="font-size:32px">🏁</div>',
+        className: '',
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+    });
 
-    const resultsEl = document.getElementById('navResults');
-    resultsEl.style.display = '';
-    resultsEl.innerHTML = '<div class="nav-result-item">🔍 Buscando...</div>';
+    // Se já existe, remove
+    // (Poderíamos guardar ref em variavel global se quiser limpar melhor)
 
-    try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=br`);
-        const data = await res.json();
+    L.marker([dest.lat, dest.lng], { icon })
+        .bindPopup(`<b>Chegada:</b> ${dest.name}`)
+        .addTo(map);
 
-        if (!data.length) {
-            resultsEl.innerHTML = '<div class="nav-result-item">❌ Nenhum resultado</div>';
-            return;
-        }
+    document.getElementById('destName').textContent = dest.name;
+    document.getElementById('destDistance').textContent = 'Calculando...';
+    document.getElementById('navInfo').classList.remove('hidden');
 
-        resultsEl.innerHTML = '';
-        data.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'nav-result-item';
-            div.textContent = item.display_name.split(',').slice(0, 4).join(',');
-            div.onclick = () => {
-                const lat = parseFloat(item.lat);
-                const lng = parseFloat(item.lon);
-                const name = item.display_name.split(',').slice(0, 3).join(',');
-                socket.emit('set_destination', { lat, lng, name });
-                resultsEl.style.display = 'none';
-                input.value = '';
-            };
-            resultsEl.appendChild(div);
-        });
-    } catch (err) {
-        resultsEl.innerHTML = '<div class="nav-result-item">❌ Erro na busca</div>';
+    updateNavUI();
+}
+
+function clearDestinationUI() {
+    destination = null;
+    if (navRouteLine) map.removeLayer(navRouteLine);
+    document.getElementById('navInfo').classList.add('hidden');
+    document.getElementById('directionsList').innerHTML = '';
+    updateNavUI();
+    // Limpar marcadores de destino do mapa seria ideal aqui
+}
+
+// ── Busca de Local (Nominatim) ───────────────────────────────
+let searchTimeout;
+function onSearchInput(e) {
+    clearTimeout(searchTimeout);
+    const query = e.target.value.trim();
+    if (query.length < 3) return;
+
+    searchTimeout = setTimeout(() => {
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(showSearchResults);
+    }, 800);
+}
+
+function showSearchResults(data) {
+    const resultsEl = document.getElementById('searchResults');
+    resultsEl.innerHTML = '';
+    resultsEl.style.display = 'block';
+
+    if (data.length === 0) {
+        resultsEl.innerHTML = '<div class="nav-result-item">Nenhum resultado</div>';
+        return;
     }
+
+    data.slice(0, 5).forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'nav-result-item';
+        div.textContent = item.display_name.split(',').slice(0, 4).join(',');
+        div.onclick = () => {
+            const lat = parseFloat(item.lat);
+            const lng = parseFloat(item.lon);
+            const name = item.display_name.split(',').slice(0, 3).join(',');
+            socket.emit('set_destination', { lat, lng, name });
+            resultsEl.style.display = 'none';
+            document.getElementById('searchInput').value = '';
+        };
+        resultsEl.appendChild(div);
+    });
 }
+
 
 function enableMapClick() {
     settingDestByClick = true;
@@ -725,7 +601,6 @@ function clearDestination() {
 }
 
 // ── Marcadores no Mapa ───────────────────────────────────────
-
 function updateUserOnMap(socketId, user) {
     if (!user.location) return;
     const { lat, lng } = user.location;
@@ -773,7 +648,6 @@ function updateUserOnMap(socketId, user) {
 
     } else {
         // Criar novo marcador
-        // Fix: Usar createUserIcon que foi definido anteriormente
         const icon = createUserIcon(user.avatar, user.color);
         const marker = L.marker([lat, lng], { icon })
             .bindPopup(`<b>${user.username}</b>`)
@@ -789,15 +663,6 @@ function updateUserOnMap(socketId, user) {
         }).addTo(map);
     }
 }
-
-// Inicializar trilha
-routePoints[socketId] = [[user.location.lat, user.location.lng]];
-routes[socketId] = L.polyline(routePoints[socketId], {
-    color: user.color,
-    weight: 4
-}).addTo(map);
-        }
-    }
 
 function removeUserFromMap(socketId) {
     if (markers[socketId]) {
@@ -901,17 +766,10 @@ function copyCode() {
 }
 
 function centerMap() {
-    const myMarker = markers[mySocketId];
-    if (myMarker) {
-        map.setView(myMarker.getLatLng(), 16, { animate: true });
+    if (myLastLat && myLastLng) {
+        startNavigation(); // Retoma o "Follow Me" com zoom alto
     } else {
-        const allMarkers = Object.values(markers);
-        if (allMarkers.length > 0) {
-            const group = L.featureGroup(allMarkers);
-            map.fitBounds(group.getBounds().pad(0.2));
-        } else {
-            showToast('📍 Nenhuma localização disponível ainda', 'info');
-        }
+        requestGPS();
     }
 }
 
@@ -943,12 +801,16 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 3200);
 }
 
-// ── TomTom: Radares e Pedágios ──────────────────────────────
-
-
 // ── Overpass: Radares e Pedágios ────────────────────────────
 let loadedNodes = new Set();  // Cache de IDs de nós já carregados
 let lastFetchParams = { center: null, zoom: 0 }; // Cache de parâmetros da última busca
+
+function initOverpassControls() {
+    const btn = document.getElementById('btnToggleTomTom');
+    if (btn) {
+        btn.onclick = toggleOverpass;
+    }
+}
 
 async function fetchOverpassData() {
     lastOverpassFetch = Date.now();
@@ -1088,7 +950,14 @@ function toggleOverpass() {
     }
     if (overpassEnabled) {
         fetchOverpassData();
+    } else {
         clearOverpassMarkers();
     }
 }
-}
+
+// ── Inicialização ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    initMap();
+    initSocket();
+    requestWakeLock();
+});
