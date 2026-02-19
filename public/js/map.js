@@ -730,11 +730,14 @@ async function fetchSpeedCameras(bounds) {
     try {
         const sw = bounds.getSouthWest();
         const ne = bounds.getNorthEast();
-        const bbox = `${sw.lat},${sw.lng},${ne.lat},${ne.lng}`;
+        const zoom = Math.min(Math.round(map.getZoom()), 18);
 
-        const url = `https://api.tomtom.com/traffic/services/5/incidentDetails?key=${TOMTOM_KEY}&bbox=${bbox}&fields={incidents{type,geometry{coordinates},properties{iconCategory}}}&language=pt-BR&categoryFilter=14`;
+        // TomTom Incident Details v5: path-based com lon,lat
+        const bbox = `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
+        const url = `https://api.tomtom.com/traffic/services/5/incidentDetails/s3/${bbox}/${zoom}/-1/json?key=${TOMTOM_KEY}&categoryFilter=14&language=pt-BR`;
 
         const res = await fetch(url);
+        if (!res.ok) return;
         const data = await res.json();
 
         // Limpar marcadores antigos de radar
@@ -744,14 +747,21 @@ async function fetchSpeedCameras(bounds) {
         if (!data.incidents) return;
 
         data.incidents.forEach(incident => {
-            if (!incident.geometry || !incident.geometry.coordinates) return;
+            // v5 retorna pontos em .geometry.coordinates ou diretamente
+            let lat, lng;
 
-            // Pegar primeiro ponto da geometria
-            let coords = incident.geometry.coordinates;
-            if (Array.isArray(coords[0])) coords = coords[0];
-
-            const lat = coords[1];
-            const lng = coords[0];
+            if (incident.geometry && incident.geometry.coordinates) {
+                let coords = incident.geometry.coordinates;
+                if (Array.isArray(coords[0])) coords = coords[0];
+                lng = coords[0];
+                lat = coords[1];
+            } else if (incident.p) {
+                // Formato alternativo {p: {x: lng, y: lat}}
+                lat = incident.p.y;
+                lng = incident.p.x;
+            } else {
+                return;
+            }
 
             if (!lat || !lng || !isFinite(lat) || !isFinite(lng)) return;
 
