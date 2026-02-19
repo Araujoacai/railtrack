@@ -38,6 +38,29 @@
             <span id="gpsText">Aguardando GPS...</span>
         </div>
 
+        <!-- Navegação (visível apenas para host) -->
+        <div class="nav-section" id="navSection" style="display:none">
+            <div class="section-title">🧭 Navegação <span class="host-badge" id="hostBadge">Anfitrião</span></div>
+            <div class="nav-search-row">
+                <input type="text" id="destSearch" placeholder="Buscar endereço..." maxlength="200"
+                    onkeydown="if(event.key==='Enter') searchDestination()" />
+                <button onclick="searchDestination()" title="Buscar">🔍</button>
+            </div>
+            <div class="nav-results" id="navResults" style="display:none"></div>
+            <p class="hint" id="navHint">Ou <a href="#" onclick="enableMapClick(); return false;"
+                    style="color:var(--accent);">clique no mapa</a> para definir o destino.</p>
+            <button class="btn-nav-clear" id="btnClearDest" onclick="clearDestination()" style="display:none">
+                ❌ Remover destino
+            </button>
+        </div>
+
+        <!-- Direções (todos veem quando há destino) -->
+        <div class="directions-section" id="directionsSection" style="display:none">
+            <div class="section-title">📋 Direções</div>
+            <div class="dest-info" id="destInfo"></div>
+            <div class="directions-list" id="directionsList"></div>
+        </div>
+
         <!-- Usuários -->
         <div class="users-section">
             <div class="section-title">Usuários na sala <span class="user-count" id="userCount">0</span></div>

@@ -1,5 +1,5 @@
 /**
- * map.js – Lógica principal do mapa em tempo real
+ * map.js – Lógica principal do mapa em tempo real + Navegação
  */
 
 // ── Estado Global ────────────────────────────────────────────
@@ -11,10 +11,21 @@ let roomCode;
 let watchId = null;
 let gpsGranted = false;
 let panelOpen = true;
+let isHost = false;
 
 const markers = {};   // socketId -> L.marker
-const routes = {};    // socketId -> L.polyline
+const routes = {};    // socketId -> L.polyline (trilha percorrida)
 const routePoints = {}; // socketId -> [[lat,lng], ...]
+
+// ── Navegação ────────────────────────────────────────────────
+let destination = null;       // { lat, lng, name }
+let destMarker = null;        // L.marker do destino
+let navRouteLine = null;      // L.polyline da rota de navegação
+let navSteps = [];            // Instruções turn-by-turn
+let lastRouteCalc = 0;        // Timestamp do último cálculo
+let myLastLat = null;
+let myLastLng = null;
+let settingDestByClick = false; // Modo de clique no mapa
 
 // ── Inicialização ────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -22,7 +33,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const avatar = sessionStorage.getItem('avatar');
     const action = sessionStorage.getItem('action');
 
-    // Redirecionar se não logado
     if (!username || !action) {
         window.location.href = '/';
         return;
@@ -37,16 +47,39 @@ function initMap() {
     map = L.map('map', {
         zoomControl: true,
         attributionControl: false,
-    }).setView([-15.7801, -47.9292], 13); // Brasil central
+    }).setView([-15.7801, -47.9292], 13);
 
-    // Tile escuro (CartoDB Dark Matter)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 19,
         subdomains: 'abcd',
     }).addTo(map);
 
-    // Atribuição discreta
     L.control.attribution({ prefix: false }).addTo(map);
+
+    // Clique no mapa para definir destino (apenas host)
+    map.on('click', onMapClick);
+}
+
+function onMapClick(e) {
+    if (!isHost) return;
+    if (!settingDestByClick) return;
+
+    const { lat, lng } = e.latlng;
+
+    // Geocoding reverso para obter o nome do local
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`)
+        .then(r => r.json())
+        .then(data => {
+            const name = data.display_name ? data.display_name.split(',').slice(0, 3).join(',') : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+            socket.emit('set_destination', { lat, lng, name });
+        })
+        .catch(() => {
+            socket.emit('set_destination', { lat, lng, name: `${lat.toFixed(4)}, ${lng.toFixed(4)}` });
+        });
+
+    settingDestByClick = false;
+    document.getElementById('navHint').textContent = 'Ou clique no mapa para definir o destino.';
+    map.getContainer().style.cursor = '';
 }
 
 // ── Socket.IO ────────────────────────────────────────────────
@@ -65,19 +98,21 @@ function initSocket(username, avatar, action) {
     });
 
     // Sala criada
-    socket.on('room_created', ({ code, user, users }) => {
-        roomCode = code;
-        myUser = user;
-        onRoomReady(users);
+    socket.on('room_created', (data) => {
+        roomCode = data.code;
+        myUser = data.user;
+        isHost = data.isHost;
+        onRoomReady(data.users, data.destination);
         showToast('🎉 Sala criada com sucesso!', 'success');
     });
 
     // Entrou em sala
-    socket.on('room_joined', ({ code, user, users }) => {
-        roomCode = code;
-        myUser = user;
-        onRoomReady(users);
-        showToast(`✅ Entrou na sala ${code}`, 'success');
+    socket.on('room_joined', (data) => {
+        roomCode = data.code;
+        myUser = data.user;
+        isHost = data.isHost;
+        onRoomReady(data.users, data.destination);
+        showToast(`✅ Entrou na sala ${data.code}`, 'success');
     });
 
     // Novo usuário entrou
@@ -99,7 +134,32 @@ function initSocket(username, avatar, action) {
         showToast(`👋 ${username} saiu da sala`, 'info');
     });
 
-    // Nova mensagem de chat
+    // Destino definido
+    socket.on('destination_set', (dest) => {
+        destination = dest;
+        showDestinationOnMap(dest);
+        showToast(`📌 Destino definido: ${dest.name}`, 'success');
+
+        // Calcular rota se temos localização
+        if (myLastLat !== null) {
+            calculateRoute(myLastLat, myLastLng, dest.lat, dest.lng);
+        }
+    });
+
+    // Destino removido
+    socket.on('destination_cleared', () => {
+        clearDestinationUI();
+        showToast('📌 Destino removido', 'info');
+    });
+
+    // Transferência de host
+    socket.on('host_changed', (data) => {
+        isHost = data.isHost;
+        updateNavUI();
+        showToast('👑 Você agora é o anfitrião da sala!', 'success');
+    });
+
+    // Chat
     socket.on('new_message', (msg) => {
         addChatMessage(msg);
     });
@@ -120,11 +180,10 @@ function initSocket(username, avatar, action) {
 }
 
 // ── Sala pronta ──────────────────────────────────────────────
-function onRoomReady(users) {
+function onRoomReady(users, dest) {
     document.getElementById('roomCodeDisplay').textContent = roomCode;
     document.title = `RealTrack – Sala ${roomCode}`;
 
-    // Renderizar usuários existentes
     users.forEach(user => {
         addOrUpdateUserInList(user);
         if (user.location) {
@@ -133,9 +192,24 @@ function onRoomReady(users) {
     });
 
     updateUserCount();
+    updateNavUI();
 
-    // Solicitar GPS
+    // Se já há destino definido, mostrar
+    if (dest) {
+        destination = dest;
+        showDestinationOnMap(dest);
+    }
+
     showGPSModal();
+}
+
+function updateNavUI() {
+    const navSection = document.getElementById('navSection');
+    if (isHost) {
+        navSection.style.display = '';
+    } else {
+        navSection.style.display = 'none';
+    }
 }
 
 // ── GPS ──────────────────────────────────────────────────────
@@ -176,11 +250,19 @@ function onLocationSuccess(pos) {
 
     setGPSStatus('active', `📡 GPS ativo · ±${Math.round(accuracy)}m`);
 
+    myLastLat = lat;
+    myLastLng = lng;
+
     socket.emit('update_location', { lat, lng, accuracy, heading, speed });
 
     // Centralizar no primeiro fix
     if (!myUser?.location) {
         map.setView([lat, lng], 16);
+    }
+
+    // Recalcular rota se há destino (a cada 10 segundos)
+    if (destination && Date.now() - lastRouteCalc > 10000) {
+        calculateRoute(lat, lng, destination.lat, destination.lng);
     }
 }
 
@@ -201,6 +283,216 @@ function setGPSStatus(state, text) {
     if (state === 'active') dot.classList.add('active');
     if (state === 'error') dot.classList.add('error');
     label.textContent = text;
+}
+
+// ── Navegação: Destino no Mapa ───────────────────────────────
+function showDestinationOnMap(dest) {
+    // Remover marcador antigo
+    if (destMarker) map.removeLayer(destMarker);
+
+    const icon = L.divIcon({
+        html: '<div class="dest-marker-icon">📍</div>',
+        className: '',
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32],
+    });
+
+    destMarker = L.marker([dest.lat, dest.lng], { icon })
+        .addTo(map)
+        .bindPopup(`<b>🎯 Destino</b><br>${escapeHTML(dest.name)}`, { className: 'dark-popup' });
+
+    // Mostrar painel de direções
+    document.getElementById('directionsSection').style.display = '';
+    document.getElementById('destInfo').innerHTML = `
+        <span>📍</span>
+        <span class="dest-name">${escapeHTML(dest.name)}</span>
+        <span class="dest-distance" id="destDistance">Calculando...</span>
+    `;
+
+    // Botão remover (host only)
+    if (isHost) {
+        document.getElementById('btnClearDest').style.display = '';
+        document.getElementById('navHint').style.display = 'none';
+    }
+}
+
+function clearDestinationUI() {
+    destination = null;
+    if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
+    if (navRouteLine) { map.removeLayer(navRouteLine); navRouteLine = null; }
+    navSteps = [];
+
+    document.getElementById('directionsSection').style.display = 'none';
+    document.getElementById('directionsList').innerHTML = '';
+    document.getElementById('destInfo').innerHTML = '';
+
+    if (isHost) {
+        document.getElementById('btnClearDest').style.display = 'none';
+        document.getElementById('navHint').style.display = '';
+    }
+}
+
+// ── Navegação: OSRM Routing ─────────────────────────────────
+async function calculateRoute(fromLat, fromLng, toLat, toLng) {
+    lastRouteCalc = Date.now();
+
+    try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=true`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.code !== 'Ok' || !data.routes || !data.routes.length) {
+            console.warn('OSRM: nenhuma rota encontrada');
+            return;
+        }
+
+        const route = data.routes[0];
+        const coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // [lng,lat] -> [lat,lng]
+
+        // Desenhar rota no mapa
+        if (navRouteLine) map.removeLayer(navRouteLine);
+        navRouteLine = L.polyline(coords, {
+            color: '#00D9FF',
+            weight: 5,
+            opacity: 0.8,
+            dashArray: '12, 8',
+            lineCap: 'round',
+        }).addTo(map);
+
+        // Distância e duração
+        const distKm = (route.distance / 1000).toFixed(1);
+        const durMin = Math.ceil(route.duration / 60);
+        const distEl = document.getElementById('destDistance');
+        if (distEl) distEl.textContent = `${distKm} km · ~${durMin} min`;
+
+        // Instruções turn-by-turn
+        const steps = route.legs[0].steps;
+        renderDirections(steps);
+
+    } catch (err) {
+        console.error('Erro ao calcular rota:', err);
+    }
+}
+
+function renderDirections(steps) {
+    const list = document.getElementById('directionsList');
+    list.innerHTML = '';
+
+    steps.forEach((step, i) => {
+        const icon = getManeuverIcon(step.maneuver.type, step.maneuver.modifier);
+        const text = translateInstruction(step);
+        const dist = step.distance >= 1000
+            ? `${(step.distance / 1000).toFixed(1)} km`
+            : `${Math.round(step.distance)} m`;
+
+        const div = document.createElement('div');
+        div.className = `direction-step${i === 0 ? ' active' : ''}`;
+        div.innerHTML = `
+            <span class="step-icon">${icon}</span>
+            <span class="step-text">${escapeHTML(text)}</span>
+            <span class="step-dist">${dist}</span>
+        `;
+        list.appendChild(div);
+    });
+}
+
+function getManeuverIcon(type, modifier) {
+    const icons = {
+        'depart': '🚩',
+        'arrive': '🏁',
+        'turn': modifier?.includes('left') ? '⬅️' : modifier?.includes('right') ? '➡️' : '↗️',
+        'new name': '⬆️',
+        'continue': '⬆️',
+        'merge': '↗️',
+        'on ramp': '↗️',
+        'off ramp': '↘️',
+        'fork': modifier?.includes('left') ? '↙️' : '↘️',
+        'roundabout': '🔄',
+        'rotary': '🔄',
+        'roundabout turn': '🔄',
+        'end of road': modifier?.includes('left') ? '⬅️' : '➡️',
+    };
+    return icons[type] || '⬆️';
+}
+
+function translateInstruction(step) {
+    const name = step.name || '';
+    const type = step.maneuver.type;
+    const mod = step.maneuver.modifier || '';
+
+    const modMap = {
+        'left': 'à esquerda',
+        'right': 'à direita',
+        'slight left': 'levemente à esquerda',
+        'slight right': 'levemente à direita',
+        'sharp left': 'acentuadamente à esquerda',
+        'sharp right': 'acentuadamente à direita',
+        'straight': 'em frente',
+        'uturn': 'retorno',
+    };
+    const modText = modMap[mod] || '';
+
+    if (type === 'depart') return name ? `Siga por ${name}` : 'Inicie a viagem';
+    if (type === 'arrive') return 'Você chegou ao destino!';
+    if (type === 'turn' || type === 'end of road') return name ? `Vire ${modText} em ${name}` : `Vire ${modText}`;
+    if (type === 'new name' || type === 'continue') return name ? `Continue por ${name}` : `Continue ${modText}`;
+    if (type === 'merge') return name ? `Entre em ${name}` : 'Mescle à via';
+    if (type === 'roundabout' || type === 'rotary') return name ? `Na rotatória, saia em ${name}` : 'Siga pela rotatória';
+    if (type === 'fork') return name ? `Pegue ${modText} em ${name}` : `Pegue ${modText}`;
+    if (type === 'on ramp') return name ? `Pegue a rampa para ${name}` : 'Pegue a rampa';
+    if (type === 'off ramp') return name ? `Saia pela rampa em ${name}` : 'Saia pela rampa';
+
+    return name ? `Siga por ${name}` : `Siga ${modText}`;
+}
+
+// ── Navegação: Busca de Endereço (Nominatim) ─────────────────
+async function searchDestination() {
+    const input = document.getElementById('destSearch');
+    const query = input.value.trim();
+    if (!query) return;
+
+    const resultsEl = document.getElementById('navResults');
+    resultsEl.style.display = '';
+    resultsEl.innerHTML = '<div class="nav-result-item">🔍 Buscando...</div>';
+
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=br`);
+        const data = await res.json();
+
+        if (!data.length) {
+            resultsEl.innerHTML = '<div class="nav-result-item">❌ Nenhum resultado</div>';
+            return;
+        }
+
+        resultsEl.innerHTML = '';
+        data.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'nav-result-item';
+            div.textContent = item.display_name.split(',').slice(0, 4).join(',');
+            div.onclick = () => {
+                const lat = parseFloat(item.lat);
+                const lng = parseFloat(item.lon);
+                const name = item.display_name.split(',').slice(0, 3).join(',');
+                socket.emit('set_destination', { lat, lng, name });
+                resultsEl.style.display = 'none';
+                input.value = '';
+            };
+            resultsEl.appendChild(div);
+        });
+    } catch (err) {
+        resultsEl.innerHTML = '<div class="nav-result-item">❌ Erro na busca</div>';
+    }
+}
+
+function enableMapClick() {
+    settingDestByClick = true;
+    document.getElementById('navHint').textContent = '👆 Clique no mapa para definir o destino...';
+    map.getContainer().style.cursor = 'crosshair';
+}
+
+function clearDestination() {
+    socket.emit('clear_destination');
 }
 
 // ── Marcadores no Mapa ───────────────────────────────────────
@@ -226,7 +518,6 @@ function updateUserOnMap(socketId, user) {
     const { lat, lng } = user.location;
     const isMe = socketId === mySocketId;
 
-    // Atualizar ou criar marcador
     if (markers[socketId]) {
         markers[socketId].setLatLng([lat, lng]);
         markers[socketId].setIcon(createMarkerIcon(user));
@@ -239,7 +530,7 @@ function updateUserOnMap(socketId, user) {
         markers[socketId] = marker;
     }
 
-    // Atualizar rota
+    // Trilha percorrida
     if (!routePoints[socketId]) routePoints[socketId] = [];
     routePoints[socketId].push([lat, lng]);
 
@@ -342,6 +633,7 @@ function addChatMessage(msg) {
 }
 
 function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
@@ -360,7 +652,6 @@ function centerMap() {
     if (myMarker) {
         map.setView(myMarker.getLatLng(), 16, { animate: true });
     } else {
-        // Centralizar em todos os usuários
         const allMarkers = Object.values(markers);
         if (allMarkers.length > 0) {
             const group = L.featureGroup(allMarkers);

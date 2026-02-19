@@ -39,6 +39,8 @@ class RoomManager {
         const code = this.generateCode();
         this.rooms.set(code, {
             users: new Map(),
+            host: null,
+            destination: null,
             createdAt: Date.now(),
         });
         return code;
@@ -78,7 +80,31 @@ class RoomManager {
             online: true,
         };
         room.users.set(socketId, user);
+        // Primeiro usuário é o host
+        if (!room.host) room.host = socketId;
         return user;
+    }
+
+    isHost(code, socketId) {
+        const room = this.rooms.get(code);
+        return room && room.host === socketId;
+    }
+
+    setDestination(code, socketId, destination) {
+        const room = this.rooms.get(code);
+        if (!room || room.host !== socketId) return false;
+        room.destination = destination; // { lat, lng, name }
+        return true;
+    }
+
+    getDestination(code) {
+        const room = this.rooms.get(code);
+        return room ? room.destination : null;
+    }
+
+    getHost(code) {
+        const room = this.rooms.get(code);
+        return room ? room.host : null;
     }
 
     updateLocation(code, socketId, lat, lng, accuracy, heading, speed) {
@@ -103,6 +129,11 @@ class RoomManager {
 
         const user = room.users.get(socketId);
         room.users.delete(socketId);
+
+        // Se o host saiu, transferir para o próximo
+        if (room.host === socketId && room.users.size > 0) {
+            room.host = room.users.keys().next().value;
+        }
 
         // Remover sala se vazia
         if (room.users.size === 0) {

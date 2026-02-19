@@ -51,7 +51,7 @@ app.use(helmet({
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "https://*.basemaps.cartocdn.com", "data:"],
-            connectSrc: ["'self'", "wss:", "ws:"],
+            connectSrc: ["'self'", "wss:", "ws:", "https://router.project-osrm.org", "https://nominatim.openstreetmap.org"],
         },
     },
 }));
@@ -199,6 +199,8 @@ io.on('connection', (socket) => {
                 code,
                 user: serializeUser(user),
                 users: roomManager.getUsers(code).map(serializeUser),
+                isHost: true,
+                destination: null,
             });
 
             console.log(`[SALA] ${cleanName} criou sala ${code}`);
@@ -258,10 +260,14 @@ io.on('connection', (socket) => {
         socket.data.roomCode = upperCode;
 
         const currentUsers = roomManager.getUsers(upperCode).map(serializeUser);
+        const destination = roomManager.getDestination(upperCode);
+        const isHost = roomManager.isHost(upperCode, socket.id);
         socket.emit('room_joined', {
             code: upperCode,
             user: serializeUser(user),
             users: currentUsers,
+            isHost,
+            destination,
         });
 
         socket.to(upperCode).emit('user_joined', {
@@ -308,6 +314,12 @@ io.on('connection', (socket) => {
 
         const user = roomManager.removeUser(code, socket.id);
         if (user) {
+            // Notificar novo host se houve transferência
+            const newHost = roomManager.getHost(code);
+            if (newHost) {
+                io.to(newHost).emit('host_changed', { isHost: true });
+            }
+
             io.to(code).emit('user_left', {
                 socketId: socket.id,
                 username: user.username,
@@ -341,6 +353,45 @@ io.on('connection', (socket) => {
             text: cleanText,
             timestamp: Date.now(),
         });
+    });
+
+    // ── Definir destino (apenas host) ────────────────────────
+    socket.on('set_destination', ({ lat, lng, name }) => {
+        const code = socket.data.roomCode;
+        if (!code) return;
+
+        // Rate limit
+        if (!checkRateLimit(socket.id, 'destination', 10)) return;
+
+        // Validar
+        if (!isValidCoord(lat, lng)) {
+            socket.emit('error', { message: 'Coordenadas de destino inválidas.' });
+            return;
+        }
+
+        const cleanName = typeof name === 'string' ? name.replace(/[<>"'&\/\\]/g, '').trim().substring(0, 100) : 'Destino';
+
+        const success = roomManager.setDestination(code, socket.id, { lat, lng, name: cleanName });
+        if (!success) {
+            socket.emit('error', { message: 'Apenas o anfitrião pode definir o destino.' });
+            return;
+        }
+
+        // Broadcast para toda a sala
+        io.to(code).emit('destination_set', { lat, lng, name: cleanName });
+        console.log(`[NAV] Destino definido na sala ${code}: ${cleanName} (${lat}, ${lng})`);
+    });
+
+    // ── Limpar destino (apenas host) ─────────────────────────
+    socket.on('clear_destination', () => {
+        const code = socket.data.roomCode;
+        if (!code) return;
+
+        const success = roomManager.setDestination(code, socket.id, null);
+        if (!success) return;
+
+        io.to(code).emit('destination_cleared');
+        console.log(`[NAV] Destino removido na sala ${code}`);
     });
 });
 
