@@ -155,6 +155,7 @@ function initSocket(username, avatar, action) {
         roomCode = data.code;
         myUser = data.user;
         isHost = data.isHost;
+        saveLastRoom(roomCode); // Persistir sala
         onRoomReady(data.users, data.destination);
         showToast('🎉 Sala criada com sucesso!', 'success');
     });
@@ -164,8 +165,26 @@ function initSocket(username, avatar, action) {
         roomCode = data.code;
         myUser = data.user;
         isHost = data.isHost;
+        saveLastRoom(roomCode); // Persistir sala
         onRoomReady(data.users, data.destination);
         showToast(`✅ Entrou na sala ${data.code}`, 'success');
+    });
+
+    // ── Persistência ─────────────────────────────────────────────
+    function saveLastRoom(code) {
+        const STORAGE_KEY = 'realtrack_user';
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, lastRoom: code, lastRoomTime: Date.now() }));
+    }
+
+    // Aviso de GPS em Background
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && gpsGranted) {
+            // Alguns navegadores limitam GPS em background
+            document.title = `📍 Rodando em background...`;
+        } else {
+            document.title = `RealTrack – Sala ${roomCode || 'Mapa'}`;
+        }
     });
 
     // Novo usuário entrou

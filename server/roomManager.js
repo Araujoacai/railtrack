@@ -20,7 +20,25 @@ const MAX_USERS_PER_ROOM = 15;
 
 class RoomManager {
     constructor() {
-        this.rooms = new Map(); // roomCode -> { users: Map, createdAt }
+        this.rooms = new Map(); // roomCode -> { users: Map, createdAt, lastActivity }
+
+        // Limpeza de salas inativas a cada minuto
+        setInterval(() => this.cleanupRooms(), 60 * 1000);
+    }
+
+    // ... (rest of constructor/methods) ...
+
+    cleanupRooms() {
+        const now = Date.now();
+        const MAX_INACTIVE_TIME = 5 * 60 * 60 * 1000; // 5 horas
+
+        for (const [code, room] of this.rooms) {
+            // Se a sala está vazia E inativa há muito tempo
+            if (room.users.size === 0 && (now - room.lastActivity > MAX_INACTIVE_TIME)) {
+                this.rooms.delete(code);
+                console.log(`Sala ${code} removida por inatividade.`);
+            }
+        }
     }
 
     generateCode() {
@@ -34,7 +52,9 @@ class RoomManager {
 
     createRoom() {
         if (this.rooms.size >= MAX_ROOMS) {
-            return null; // Limite de salas atingido
+            // Tentar limpar antes de negar
+            this.cleanupRooms();
+            if (this.rooms.size >= MAX_ROOMS) return null;
         }
         const code = this.generateCode();
         this.rooms.set(code, {
@@ -42,8 +62,30 @@ class RoomManager {
             host: null,
             destination: null,
             createdAt: Date.now(),
+            lastActivity: Date.now(),
         });
         return code;
+    }
+
+    // ... methods ...
+
+    removeUser(code, socketId) {
+        const room = this.rooms.get(code);
+        if (!room) return null;
+
+        const user = room.users.get(socketId);
+        room.users.delete(socketId);
+        room.lastActivity = Date.now(); // Atualizar atividade
+
+        // Se o host saiu, transferir para o próximo (se houver)
+        if (room.host === socketId && room.users.size > 0) {
+            room.host = room.users.keys().next().value;
+        }
+
+        // NÃO deletar a sala imediatamente se estiver vazia. 
+        // Ela será limpa pelo cleanupRooms se ficar vazia por 5h.
+
+        return user;
     }
 
     roomExists(code) {

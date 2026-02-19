@@ -3,6 +3,48 @@
  */
 
 let selectedEmoji = '😊';
+const STORAGE_KEY = 'realtrack_user';
+
+// Carregar dados salvos
+document.addEventListener('DOMContentLoaded', () => {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+
+    if (saved.username) document.getElementById('username').value = saved.username;
+
+    if (saved.avatar) {
+        selectedEmoji = saved.avatar;
+        document.getElementById('avatarEmoji').textContent = selectedEmoji;
+        document.querySelectorAll('.emoji-opt').forEach(e => {
+            if (e.dataset.emoji === selectedEmoji) e.classList.add('selected');
+            else e.classList.remove('selected');
+        });
+    } else {
+        document.querySelector('.emoji-opt')?.classList.add('selected');
+    }
+
+    // Sugerir reconexão se houver última sala
+    if (saved.lastRoom) {
+        const joinPanel = document.getElementById('panelJoin');
+        const hint = document.createElement('div');
+        hint.style.cssText = 'margin-top:10px; font-size:12px; color:var(--text-secondary); text-align:center; cursor:pointer';
+        hint.innerHTML = `Última sala: <span style="color:var(--accent);text-decoration:underline">${saved.lastRoom}</span>`;
+        hint.onclick = () => {
+            switchTab('join');
+            document.getElementById('roomCode').value = saved.lastRoom;
+        };
+        joinPanel.appendChild(hint);
+    }
+});
+
+function saveUserData(username, avatar) {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, username, avatar }));
+}
+
+function saveLastRoom(code) {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, lastRoom: code }));
+}
 
 // Selecionar emoji de avatar
 function selectEmoji(el) {
@@ -49,12 +91,13 @@ async function createRoom() {
     const username = getUsername();
     if (!username) return;
 
-    // Salvar dados na sessão
+    saveUserData(username, selectedEmoji);
+
+    // Salvar dados na sessão (ainda necessário para o map.js ler initially)
     sessionStorage.setItem('username', username);
     sessionStorage.setItem('avatar', selectedEmoji);
     sessionStorage.setItem('action', 'create');
 
-    // Usar URL absoluta + timestamp para ignorar cache de redirect do Chrome
     const base = `${location.protocol}//${location.host}`;
     window.location.replace(`${base}/map?t=${Date.now()}`);
 }
@@ -71,25 +114,27 @@ async function joinRoom() {
         return;
     }
 
+    saveUserData(username, selectedEmoji);
+
     // Verificar se sala existe (se falhar, deixa o servidor decidir)
     try {
         const res = await fetch(`/api/room/${code}`);
         const data = await res.json();
         if (!data.exists) {
-            showError('Sala não encontrada. Verifique o código e tente novamente.');
+            showError('Sala não encontrada ou expirada (5h).');
             return;
         }
     } catch {
-        // Se fetch falhar, prossegue mesmo assim — o servidor vai rejeitar se não existir
+        // Se fetch falhar, prossegue mesmo assim
         console.warn('Verificação de sala falhou, prosseguindo...');
     }
 
+    saveLastRoom(code);
     sessionStorage.setItem('username', username);
     sessionStorage.setItem('avatar', selectedEmoji);
     sessionStorage.setItem('action', 'join');
     sessionStorage.setItem('roomCode', code);
 
-    // Usar URL absoluta + timestamp para ignorar cache de redirect do Chrome
     const base = `${location.protocol}//${location.host}`;
     window.location.replace(`${base}/map?t=${Date.now()}`);
 }
