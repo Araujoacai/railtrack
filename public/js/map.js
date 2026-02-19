@@ -47,6 +47,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initMap();
     initSocket(username, avatar, action);
+    registerServiceWorker();
+    requestWakeLock();
+});
+
+// ── PWA & Wake Lock ──────────────────────────────────────────
+async function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        try {
+            await navigator.serviceWorker.register('/sw.js');
+            console.log('SW registrado');
+        } catch (e) {
+            console.log('SW falhou', e);
+        }
+    }
+}
+
+let wakeLock = null;
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('Wake Lock ativo');
+
+            wakeLock.addEventListener('release', () => {
+                console.log('Wake Lock solto');
+            });
+        }
+    } catch (err) {
+        console.log('Erro Wake Lock:', err.name, err.message);
+    }
+}
+
+// Re-solicitar Wake Lock se a aba voltar a ficar visível
+document.addEventListener('visibilitychange', async () => {
+    if (wakeLock !== null && document.visibilityState === 'visible') {
+        await requestWakeLock();
+    }
 });
 
 // ── Mapa Leaflet ─────────────────────────────────────────────
