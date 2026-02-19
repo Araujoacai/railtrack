@@ -1,21 +1,17 @@
-const CACHE_NAME = 'realtrack-v5';
-const STATIC_ASSETS = [
-    '/',
-    '/index.html',
-    '/map.html',
+// SW v6: JS e HTML sempre vêm da rede (Network First sem cache de install)
+// CSS e imagens usam Cache First para performance offline
+const CACHE_NAME = 'realtrack-v6';
+const CACHEABLE_ASSETS = [
     '/css/style.css',
-    '/js/login.js',
-    '/js/map.js',
     '/manifest.json',
     '/icon-192.png',
-    '/icon-512.png',
-    '/socket.io/socket.io.js'
+    '/icon-512.png'
 ];
 
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+        caches.open(CACHE_NAME).then((cache) => cache.addAll(CACHEABLE_ASSETS))
     );
 });
 
@@ -31,32 +27,24 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
     const url = new URL(e.request.url);
 
-    // Ignorar requisições externas — deixar o browser lidar
+    // Ignorar requisições externas
     if (url.origin !== self.location.origin) {
         return;
     }
 
-    const isJsOrHtml = url.pathname.endsWith('.js')
-        || url.pathname.endsWith('.html')
-        || url.pathname === '/'
-        || url.pathname.startsWith('/map');
+    const isJS = url.pathname.endsWith('.js');
+    const isHTML = url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname.startsWith('/map') || url.pathname.startsWith('/index');
+    const isSocketIO = url.pathname.startsWith('/socket.io');
 
-    if (isJsOrHtml) {
-        // Network First para JS e HTML: sempre tenta a rede primeiro
-        // Garante que atualizações de código apareçam imediatamente
-        e.respondWith(
-            fetch(e.request)
-                .then((networkResp) => {
-                    const clone = networkResp.clone();
-                    caches.open(CACHE_NAME).then((c) => c.put(e.request, clone));
-                    return networkResp;
-                })
-                .catch(() => caches.match(e.request)) // offline fallback
-        );
-    } else {
-        // Cache First para CSS, imagens, etc.
-        e.respondWith(
-            caches.match(e.request).then((cached) => cached || fetch(e.request))
-        );
+    if (isJS || isHTML || isSocketIO) {
+        // Network Only para JS e HTML — NUNCA do cache
+        // Garante que mudanças de código aparecem imediatamente
+        e.respondWith(fetch(e.request));
+        return;
     }
+
+    // Cache First para CSS, imagens, manifesto
+    e.respondWith(
+        caches.match(e.request).then((cached) => cached || fetch(e.request))
+    );
 });

@@ -327,15 +327,9 @@ function onLocationSuccess(pos) {
         initialCenterDone = true;
     }
 
-    // Se estiver no modo navegação, manter centralizado (Auto-Center / Follow Me)
-    if (isNavigating) {
-        map.flyTo([lat, lng], 18, { animate: true, duration: 1.5 }); // Zoom 18, transição suave
-    }
-
     // Recalcular rota se há destino (a cada 10 segundos)
     if (destination && Date.now() - lastRouteCalc > 10000) {
         calculateRoute(lat, lng, destination.lat, destination.lng);
-        // Se calculou rota e não estava navegando, inicia animação de entrada (apenas uma vez)
         if (!isNavigating && !settingDestByClick) {
             startNavigation();
         }
