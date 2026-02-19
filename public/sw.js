@@ -1,4 +1,4 @@
-const CACHE_NAME = 'realtrack-v1';
+const CACHE_NAME = 'realtrack-v2-nav';
 const ASSETS = [
     '/',
     '/index.html',
