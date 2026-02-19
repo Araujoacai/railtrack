@@ -310,13 +310,60 @@ function onLocationSuccess(pos) {
 
     // Centralizar apenas no primeiro fix de GPS
     if (!initialCenterDone) {
-        map.setView([lat, lng], 16);
+        map.setView([lat, lng], 18);
         initialCenterDone = true;
+    }
+
+    // Se estiver no modo navegação, manter centralizado (Auto-Center / Follow Me)
+    if (isNavigating) {
+        map.flyTo([lat, lng], 18, { animate: true, duration: 1.5 }); // Zoom 18, transição suave
     }
 
     // Recalcular rota se há destino (a cada 10 segundos)
     if (destination && Date.now() - lastRouteCalc > 10000) {
         calculateRoute(lat, lng, destination.lat, destination.lng);
+        // Se calculou rota e não estava navegando, inicia animação de entrada (apenas uma vez)
+        if (!isNavigating && !settingDestByClick) {
+            startNavigation();
+        }
+    }
+}
+
+// ── Controle de Navegação ────────────────────────────────────
+let isNavigating = false;
+
+function startNavigation() {
+    isNavigating = true;
+    const btn = document.querySelector('.fab-center');
+    if (btn) btn.classList.add('active'); // Estilo visual para indicar "seguindo"
+
+    if (myLastLat && myLastLng) {
+        map.flyTo([myLastLat, myLastLng], 18, {
+            animate: true,
+            duration: 2.0 // Animação de entrada lenta (2s)
+        });
+    }
+}
+
+function stopNavigation() {
+    isNavigating = false;
+    const btn = document.querySelector('.fab-center');
+    if (btn) btn.classList.remove('active');
+}
+
+// Detectar interação do usuário para pausar "Follow Me"
+map.on('dragstart', () => {
+    if (isNavigating) {
+        stopNavigation();
+        showToast('Navegação pausada. Toque em 🎯 para retomar.', 'info');
+    }
+});
+
+function centerMap() {
+    if (myLastLat && myLastLng) {
+        startNavigation(); // Retoma o "Follow Me" com zoom alto
+    } else {
+        requestGPS();
     }
 }
 

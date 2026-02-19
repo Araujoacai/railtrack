@@ -877,6 +877,43 @@ body {
   margin-bottom: 20px !important;
 }
 
+/* Botão de localização (FAB) */
+.fab-center {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: rgba(10, 14, 26, 0.9);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.fab-center:hover {
+  transform: scale(1.1);
+  background: var(--bg-card);
+}
+
+.fab-center:active {
+  transform: scale(0.95);
+}
+
+.fab-center.active {
+  color: #00D9FF;
+  border-color: #00D9FF;
+  box-shadow: 0 0 15px rgba(0, 217, 255, 0.5);
+  background: rgba(10, 14, 26, 0.95);
+}
+
 /* Marcadores do mapa */
 .custom-marker {
   display: flex;
@@ -975,6 +1012,13 @@ body {
   .fab-center {
     bottom: 16px;
     right: 16px;
+  }
+
+  .fab-center.active {
+    color: #00D9FF;
+    border-color: #00D9FF;
+    box-shadow: 0 0 15px rgba(0, 217, 255, 0.5);
+    background: rgba(10, 14, 26, 0.95);
   }
 }
 
