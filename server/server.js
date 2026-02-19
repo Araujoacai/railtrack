@@ -144,6 +144,11 @@ app.get('/api/room/:code', (req, res) => {
     res.json({ exists: roomManager.roomExists(code) });
 });
 
+// API: Keep-Alive (evitar sleep do Render)
+app.get('/api/keep-alive', (req, res) => {
+    res.sendStatus(200);
+});
+
 // API: estatísticas (protegida – apenas em dev)
 app.get('/api/stats', (req, res) => {
     if (isProduction) {

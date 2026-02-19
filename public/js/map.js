@@ -178,6 +178,7 @@ function initSocket(username, avatar, action) {
     }
 
     // Aviso de GPS em Background
+    // Aviso de GPS em Background
     document.addEventListener('visibilitychange', () => {
         if (document.hidden && gpsGranted) {
             // Alguns navegadores limitam GPS em background
@@ -186,6 +187,11 @@ function initSocket(username, avatar, action) {
             document.title = `RealTrack – Sala ${roomCode || 'Mapa'}`;
         }
     });
+
+    // ── Keep-Alive (Ping periódico a cada 10 min) ────────────────
+    setInterval(() => {
+        fetch('/api/keep-alive').catch(() => { });
+    }, 10 * 60 * 1000);
 
     // Novo usuário entrou
     socket.on('user_joined', ({ user }) => {
