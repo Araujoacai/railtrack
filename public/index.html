@@ -1,13 +1,17 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RealTrack – Compartilhe sua Localização</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0a0e1a">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
+
 <body class="login-page">
 
   <!-- Background animado -->
@@ -50,13 +54,7 @@
       <!-- Nome -->
       <div class="form-group">
         <label for="username">Seu nome</label>
-        <input
-          type="text"
-          id="username"
-          placeholder="Como quer ser chamado?"
-          maxlength="20"
-          autocomplete="off"
-        />
+        <input type="text" id="username" placeholder="Como quer ser chamado?" maxlength="20" autocomplete="off" />
       </div>
 
       <!-- Tabs: Criar / Entrar -->
@@ -77,14 +75,8 @@
       <div id="panelJoin" class="tab-panel hidden">
         <div class="form-group">
           <label for="roomCode">Código da sala</label>
-          <input
-            type="text"
-            id="roomCode"
-            placeholder="Ex: ABC123"
-            maxlength="6"
-            autocomplete="off"
-            oninput="this.value = this.value.toUpperCase()"
-          />
+          <input type="text" id="roomCode" placeholder="Ex: ABC123" maxlength="6" autocomplete="off"
+            oninput="this.value = this.value.toUpperCase()" />
         </div>
         <button class="btn-primary" onclick="joinRoom()">
           <span>🔗</span> Entrar na sala
@@ -100,4 +92,5 @@
 
   <script src="js/login.js"></script>
 </body>
+
 </html>
