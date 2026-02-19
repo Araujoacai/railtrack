@@ -1,7 +1,8 @@
 {
     "name": "RealTrack GPS",
     "short_name": "RealTrack",
-    "start_url": "/map.html",
+    "description": "Navegação GPS em tempo real com alertas de radares e pedágios, compartilhamento de localização e chat integrado.",
+    "start_url": "/",
     "scope": "/",
     "display": "standalone",
     "background_color": "#0a0e1a",
@@ -17,6 +18,20 @@
             "src": "icon-512.png",
             "type": "image/png",
             "sizes": "512x512"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "https://dummyimage.com/720x1280/0a0e1a/fff.png&text=RealTrack+Mobile",
+            "sizes": "720x1280",
+            "type": "image/png",
+            "form_factor": "narrow"
+        },
+        {
+            "src": "https://dummyimage.com/1280x720/0a0e1a/fff.png&text=RealTrack+Desktop",
+            "sizes": "1280x720",
+            "type": "image/png",
+            "form_factor": "wide"
         }
     ],
     "categories": [

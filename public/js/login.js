@@ -111,3 +111,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Selecionar primeiro emoji por padrão
     document.querySelector('.emoji-opt')?.classList.add('selected');
 });
+
+// ── PWA: Registrar Service Worker ────────────────────────────
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('SW registrado na home:', reg.scope))
+            .catch(err => console.log('SW falhou na home:', err));
+    });
+}
