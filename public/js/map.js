@@ -29,7 +29,7 @@ let myLastLng = null;
 let settingDestByClick = false; // Modo de clique no mapa
 
 // ── TomTom – Radares e Pedágios ─────────────────────────────
-const TOMTOM_KEY = 'nT07nUrsd6LfTWCGpzu31k6OyBK9nQoh';
+const TOMTOM_KEY = 'X0nXXiH9EJtL0plX32MaMiHoNsVh8xVJ';
 let tomtomEnabled = true;
 let speedCamMarkers = [];     // Array de L.marker para radares
 let tollMarkers = [];         // Array de L.marker para pedágios
