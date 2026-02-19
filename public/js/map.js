@@ -730,40 +730,30 @@ async function fetchSpeedCameras(bounds) {
     try {
         const sw = bounds.getSouthWest();
         const ne = bounds.getNorthEast();
-        const zoom = Math.min(Math.round(map.getZoom()), 18);
 
-        // TomTom Incident Details v5: path-based com lon,lat
         const bbox = `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
-        const url = `https://api.tomtom.com/traffic/services/5/incidentDetails/s3/${bbox}/${zoom}/-1/json?key=${TOMTOM_KEY}&categoryFilter=14&language=pt-BR`;
+
+        const url = `https://api.tomtom.com/traffic/services/5/incidentDetails/json?key=${TOMTOM_KEY}&bbox=${bbox}&fields=incidents&categoryFilter=14&language=pt-BR`;
 
         const res = await fetch(url);
-        if (!res.ok) return;
+        if (!res.ok) {
+            console.warn("TomTom error:", res.status);
+            return;
+        }
+
         const data = await res.json();
 
-        // Limpar marcadores antigos de radar
         speedCamMarkers.forEach(m => map.removeLayer(m));
         speedCamMarkers = [];
 
         if (!data.incidents) return;
 
         data.incidents.forEach(incident => {
-            // v5 retorna pontos em .geometry.coordinates ou diretamente
-            let lat, lng;
+            if (!incident.geometry?.coordinates) return;
 
-            if (incident.geometry && incident.geometry.coordinates) {
-                let coords = incident.geometry.coordinates;
-                if (Array.isArray(coords[0])) coords = coords[0];
-                lng = coords[0];
-                lat = coords[1];
-            } else if (incident.p) {
-                // Formato alternativo {p: {x: lng, y: lat}}
-                lat = incident.p.y;
-                lng = incident.p.x;
-            } else {
-                return;
-            }
+            const [lng, lat] = incident.geometry.coordinates;
 
-            if (!lat || !lng || !isFinite(lat) || !isFinite(lng)) return;
+            if (!isFinite(lat) || !isFinite(lng)) return;
 
             const icon = L.divIcon({
                 html: '<div class="tomtom-marker radar-marker">📷</div>',
@@ -778,6 +768,7 @@ async function fetchSpeedCameras(bounds) {
 
             speedCamMarkers.push(marker);
         });
+
     } catch (err) {
         console.warn('TomTom Speed Cameras:', err.message);
     }
