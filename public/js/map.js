@@ -560,18 +560,28 @@ function showDestinationOnMap(dest) {
         .bindPopup(`<b>Chegada:</b> ${dest.name}`)
         .addTo(map);
 
-    document.getElementById('destName').textContent = dest.name;
-    document.getElementById('destDistance').textContent = 'Calculando...';
-    document.getElementById('navInfo').classList.remove('hidden');
+    const destInfoEl = document.getElementById('destInfo');
+    if (destInfoEl) destInfoEl.textContent = `📌 ${dest.name}`;
+
+    const dirSection = document.getElementById('directionsSection');
+    if (dirSection) dirSection.style.display = '';
 
     updateNavUI();
 }
 
 function clearDestinationUI() {
     destination = null;
-    if (navRouteLine) map.removeLayer(navRouteLine);
-    document.getElementById('navInfo').classList.add('hidden');
-    document.getElementById('directionsList').innerHTML = '';
+    if (navRouteLine) { map.removeLayer(navRouteLine); navRouteLine = null; }
+
+    const dirSection = document.getElementById('directionsSection');
+    if (dirSection) dirSection.style.display = 'none';
+
+    const dirList = document.getElementById('directionsList');
+    if (dirList) dirList.innerHTML = '';
+
+    const destInfoEl = document.getElementById('destInfo');
+    if (destInfoEl) destInfoEl.textContent = '';
+
     updateNavUI();
     // Limpar marcadores de destino do mapa seria ideal aqui
 }
