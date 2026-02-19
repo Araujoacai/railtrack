@@ -27,6 +27,13 @@ let myLastLat = null;
 let myLastLng = null;
 let settingDestByClick = false; // Modo de clique no mapa
 
+// ── TomTom – Radares e Pedágios ─────────────────────────────
+const TOMTOM_KEY = 'nT07nUrsd6LfTWCGpzu31k6OyBK9nQoh';
+let tomtomEnabled = true;
+let speedCamMarkers = [];     // Array de L.marker para radares
+let tollMarkers = [];         // Array de L.marker para pedágios
+let lastTomtomFetch = 0;      // Debounce
+
 // ── Inicialização ────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     const username = sessionStorage.getItem('username');
@@ -58,6 +65,15 @@ function initMap() {
 
     // Clique no mapa para definir destino (apenas host)
     map.on('click', onMapClick);
+
+    // Buscar radares/pedágios ao mover o mapa
+    map.on('moveend', onMapMoveEnd);
+}
+
+function onMapMoveEnd() {
+    if (!tomtomEnabled) return;
+    if (Date.now() - lastTomtomFetch < 5000) return; // Debounce 5s
+    fetchTomTomData();
 }
 
 function onMapClick(e) {
@@ -688,4 +704,131 @@ function showToast(message, type = 'info') {
     toast.textContent = message;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 3200);
+}
+
+// ── TomTom: Radares e Pedágios ──────────────────────────────
+async function fetchTomTomData() {
+    lastTomtomFetch = Date.now();
+    const bounds = map.getBounds();
+    const zoom = map.getZoom();
+
+    // Só buscar se zoom >= 11 (evitar muitas chamadas em zoom longe)
+    if (zoom < 11) {
+        clearTomTomMarkers();
+        return;
+    }
+
+    await Promise.all([
+        fetchSpeedCameras(bounds),
+        fetchTollBooths(bounds),
+    ]);
+}
+
+async function fetchSpeedCameras(bounds) {
+    try {
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+        const bbox = `${sw.lat},${sw.lng},${ne.lat},${ne.lng}`;
+
+        const url = `https://api.tomtom.com/traffic/services/5/incidentDetails?key=${TOMTOM_KEY}&bbox=${bbox}&fields={incidents{type,geometry{coordinates},properties{iconCategory}}}&language=pt-BR&categoryFilter=14`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        // Limpar marcadores antigos de radar
+        speedCamMarkers.forEach(m => map.removeLayer(m));
+        speedCamMarkers = [];
+
+        if (!data.incidents) return;
+
+        data.incidents.forEach(incident => {
+            if (!incident.geometry || !incident.geometry.coordinates) return;
+
+            // Pegar primeiro ponto da geometria
+            let coords = incident.geometry.coordinates;
+            if (Array.isArray(coords[0])) coords = coords[0];
+
+            const lat = coords[1];
+            const lng = coords[0];
+
+            if (!lat || !lng || !isFinite(lat) || !isFinite(lng)) return;
+
+            const icon = L.divIcon({
+                html: '<div class="tomtom-marker radar-marker">📷</div>',
+                className: '',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14],
+            });
+
+            const marker = L.marker([lat, lng], { icon })
+                .addTo(map)
+                .bindPopup('<b>📷 Radar de velocidade</b>', { className: 'dark-popup' });
+
+            speedCamMarkers.push(marker);
+        });
+    } catch (err) {
+        console.warn('TomTom Speed Cameras:', err.message);
+    }
+}
+
+async function fetchTollBooths(bounds) {
+    try {
+        const center = bounds.getCenter();
+        // Calcular raio em metros baseado no bounds
+        const radius = Math.min(Math.round(center.distanceTo(bounds.getNorthEast())), 50000);
+
+        const url = `https://api.tomtom.com/search/2/categorySearch/toll.json?key=${TOMTOM_KEY}&lat=${center.lat}&lon=${center.lng}&radius=${radius}&limit=50&language=pt-BR`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        // Limpar marcadores antigos de pedágio
+        tollMarkers.forEach(m => map.removeLayer(m));
+        tollMarkers = [];
+
+        if (!data.results) return;
+
+        data.results.forEach(result => {
+            const { lat, lon: lng } = result.position;
+
+            const icon = L.divIcon({
+                html: '<div class="tomtom-marker toll-marker">💰</div>',
+                className: '',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14],
+            });
+
+            const name = result.poi?.name || 'Pedágio';
+            const addr = result.address?.freeformAddress || '';
+
+            const marker = L.marker([lat, lng], { icon })
+                .addTo(map)
+                .bindPopup(`<b>💰 ${escapeHTML(name)}</b>${addr ? '<br>' + escapeHTML(addr) : ''}`, { className: 'dark-popup' });
+
+            tollMarkers.push(marker);
+        });
+    } catch (err) {
+        console.warn('TomTom Toll Booths:', err.message);
+    }
+}
+
+function clearTomTomMarkers() {
+    speedCamMarkers.forEach(m => map.removeLayer(m));
+    tollMarkers.forEach(m => map.removeLayer(m));
+    speedCamMarkers = [];
+    tollMarkers = [];
+}
+
+function toggleTomTom() {
+    tomtomEnabled = !tomtomEnabled;
+    const btn = document.getElementById('btnToggleTomTom');
+    if (btn) {
+        btn.textContent = tomtomEnabled ? '📷 Radares: ON' : '📷 Radares: OFF';
+        btn.classList.toggle('active', tomtomEnabled);
+    }
+    if (tomtomEnabled) {
+        fetchTomTomData();
+    } else {
+        clearTomTomMarkers();
+    }
 }
