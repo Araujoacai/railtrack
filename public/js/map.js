@@ -674,22 +674,6 @@ function clearDestination() {
 }
 
 // ── Marcadores no Mapa ───────────────────────────────────────
-function createMarkerIcon(user) {
-    const isMe = user.socketId === mySocketId;
-    const div = document.createElement('div');
-    div.className = `custom-marker${isMe ? ' my-marker' : ''}`;
-    div.style.borderColor = user.color;
-    div.style.color = user.color;
-    div.style.boxShadow = `0 0 15px ${user.color}66`;
-    div.textContent = user.avatar;
-    return L.divIcon({
-        html: div.outerHTML,
-        className: '',
-        iconSize: [44, 44],
-        iconAnchor: [22, 22],
-        popupAnchor: [0, -26],
-    });
-}
 
 function updateUserOnMap(socketId, user) {
     if (!user.location) return;
@@ -697,106 +681,113 @@ function updateUserOnMap(socketId, user) {
     const isMe = socketId === mySocketId;
 
     if (markers[socketId]) {
-        markers[socketId].setLatLng([lat, lng]);
-        // Se o usuário já existe no mapa
-        if (markers[socketId]) {
-            const marker = markers[socketId];
-            const newLatLng = [user.location.lat, user.location.lng];
+        const marker = markers[socketId];
+        const newLatLng = [lat, lng];
 
-            // Atualizar posição
-            marker.setLatLng(newLatLng);
+        // Atualizar posição (apenas uma vez)
+        marker.setLatLng(newLatLng);
 
-            // Atualizar rotação (Bússola) se disponível
-            if (user.location.heading !== undefined) {
-                const el = marker.getElement();
-                if (el) {
-                    const markerDiv = el.querySelector('.user-marker');
-                    const emojiDiv = el.querySelector('.user-emoji');
-                    if (markerDiv) markerDiv.style.transform = `rotate(${user.location.heading}deg)`;
-                    // Manter emoji em pé se desejar, ou girar junto
-                    if (emojiDiv) emojiDiv.style.transform = `rotate(${-user.location.heading}deg)`;
-                }
+        // Atualizar rotação (Bússola) se disponível
+        if (user.location.heading !== undefined) {
+            const el = marker.getElement();
+            if (el) {
+                const markerDiv = el.querySelector('.user-marker');
+                const emojiDiv = el.querySelector('.user-emoji');
+                if (markerDiv) markerDiv.style.transform = `rotate(${user.location.heading}deg)`;
+                // Manter emoji em pé se desejar, ou girar junto
+                if (emojiDiv) emojiDiv.style.transform = `rotate(${-user.location.heading}deg)`;
             }
+        }
 
-            // Adicionar ponto na trilha
-            if (!routes[socketId]) {
-                routes[socketId] = L.polyline([], { color: user.color, weight: 4 }).addTo(map);
-                routePoints[socketId] = [];
+        // Adicionar ponto na trilha
+        if (!routes[socketId]) {
+            routes[socketId] = L.polyline([], { color: user.color, weight: 4 }).addTo(map);
+            routePoints[socketId] = [];
+        }
+        routePoints[socketId].push(newLatLng);
+        routes[socketId].setLatLngs(routePoints[socketId]);
+
+        // Follow Me (Suave) - Apenas se for eu e estiver navegando
+        if (socketId === mySocketId && isNavigating) {
+            const currentCenter = map.getCenter();
+            const dist = map.distance(currentCenter, newLatLng);
+
+            // Panorâmica suave para distâncias curtas, ou pulo para longas
+            if (dist < 100) {
+                map.panTo(newLatLng, { animate: true, duration: 0.5 });
+            } else {
+                map.setView(newLatLng, 18);
             }
-            routePoints[socketId].push(newLatLng);
-            routes[socketId].setLatLngs(routePoints[socketId]);
+        }
 
-            // Follow Me (Suave) - Apenas se for eu e estiver navegando
-            if (socketId === mySocketId && isNavigating) {
-                const currentCenter = map.getCenter();
-                const dist = map.distance(currentCenter, newLatLng);
+    } else {
+        // Criar novo marcador
+        // Fix: Usar createUserIcon que foi definido anteriormente
+        const icon = createUserIcon(user.avatar, user.color);
+        const marker = L.marker([lat, lng], { icon })
+            .bindPopup(`<b>${user.username}</b>`)
+            .addTo(map);
 
-                // Panorâmica suave para distâncias curtas, ou pulo para longas
-                if (dist < 100) {
-                    map.panTo(newLatLng, { animate: true, duration: 0.5 });
-                } else {
-                    map.setView(newLatLng, 18);
-                }
-            }
+        markers[socketId] = marker;
 
-        } else {
-            // Criar novo marcador
-            const icon = createUserIcon(user.avatar, user.color);
-            const marker = L.marker([user.location.lat, user.location.lng], { icon })
-                .bindPopup(`<b>${user.username}</b>`)
-                .addTo(map);
+        // Inicializar trilha
+        routePoints[socketId] = [[lat, lng]];
+        routes[socketId] = L.polyline(routePoints[socketId], {
+            color: user.color,
+            weight: 4
+        }).addTo(map);
+    }
+}
 
-            markers[socketId] = marker;
-
-            // Inicializar trilha
-            routePoints[socketId] = [[user.location.lat, user.location.lng]];
-            routes[socketId] = L.polyline(routePoints[socketId], {
-                color: user.color,
-                weight: 4
-            }).addTo(map);
+// Inicializar trilha
+routePoints[socketId] = [[user.location.lat, user.location.lng]];
+routes[socketId] = L.polyline(routePoints[socketId], {
+    color: user.color,
+    weight: 4
+}).addTo(map);
         }
     }
 
-    function removeUserFromMap(socketId) {
-        if (markers[socketId]) {
-            map.removeLayer(markers[socketId]);
-            delete markers[socketId];
-        }
-        if (routes[socketId]) {
-            map.removeLayer(routes[socketId]);
-            delete routes[socketId];
-            delete routePoints[socketId];
-        }
+function removeUserFromMap(socketId) {
+    if (markers[socketId]) {
+        map.removeLayer(markers[socketId]);
+        delete markers[socketId];
+    }
+    if (routes[socketId]) {
+        map.removeLayer(routes[socketId]);
+        delete routes[socketId];
+        delete routePoints[socketId];
+    }
+}
+
+// ── Lista de Usuários ────────────────────────────────────────
+function addOrUpdateUserInList(user) {
+    const existing = document.getElementById(`user-${user.socketId}`);
+    if (existing) {
+        updateUserInList(user.socketId, user);
+        return;
     }
 
-    // ── Lista de Usuários ────────────────────────────────────────
-    function addOrUpdateUserInList(user) {
-        const existing = document.getElementById(`user-${user.socketId}`);
-        if (existing) {
-            updateUserInList(user.socketId, user);
-            return;
-        }
+    const el = document.createElement('div');
+    el.className = 'user-item';
+    el.id = `user-${user.socketId}`;
+    el.innerHTML = buildUserItemHTML(user);
+    document.getElementById('usersList').appendChild(el);
+    updateUserCount();
+}
 
-        const el = document.createElement('div');
-        el.className = 'user-item';
-        el.id = `user-${user.socketId}`;
-        el.innerHTML = buildUserItemHTML(user);
-        document.getElementById('usersList').appendChild(el);
-        updateUserCount();
-    }
+function updateUserInList(socketId, user) {
+    const el = document.getElementById(`user-${socketId}`);
+    if (el) el.innerHTML = buildUserItemHTML(user);
+}
 
-    function updateUserInList(socketId, user) {
-        const el = document.getElementById(`user-${socketId}`);
-        if (el) el.innerHTML = buildUserItemHTML(user);
-    }
+function buildUserItemHTML(user) {
+    const isMe = user.socketId === mySocketId;
+    const coords = user.location
+        ? `${user.location.lat.toFixed(4)}, ${user.location.lng.toFixed(4)}`
+        : 'Aguardando GPS...';
 
-    function buildUserItemHTML(user) {
-        const isMe = user.socketId === mySocketId;
-        const coords = user.location
-            ? `${user.location.lat.toFixed(4)}, ${user.location.lng.toFixed(4)}`
-            : 'Aguardando GPS...';
-
-        return `
+    return `
     <div class="user-avatar" style="border-color:${escapeHTML(user.color)}">${escapeHTML(user.avatar)}</div>
     <div class="user-info">
       <div class="user-name">${escapeHTML(user.username)}${isMe ? ' <small>(você)</small>' : ''}</div>
@@ -804,142 +795,142 @@ function updateUserOnMap(socketId, user) {
     </div>
     <div class="user-dot" style="background:${escapeHTML(user.color)};box-shadow:0 0 6px ${escapeHTML(user.color)}"></div>
   `;
-    }
+}
 
-    function removeUserFromList(socketId) {
-        const el = document.getElementById(`user-${socketId}`);
-        if (el) el.remove();
-        updateUserCount();
-    }
+function removeUserFromList(socketId) {
+    const el = document.getElementById(`user-${socketId}`);
+    if (el) el.remove();
+    updateUserCount();
+}
 
-    function updateUserCount() {
-        const count = document.getElementById('usersList').children.length;
-        document.getElementById('userCount').textContent = count;
-    }
+function updateUserCount() {
+    const count = document.getElementById('usersList').children.length;
+    document.getElementById('userCount').textContent = count;
+}
 
-    // ── Chat ─────────────────────────────────────────────────────
-    function sendMessage() {
-        const input = document.getElementById('chatInput');
-        const text = input.value.trim();
-        if (!text) return;
-        socket.emit('send_message', { text });
-        input.value = '';
-    }
+// ── Chat ─────────────────────────────────────────────────────
+function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    socket.emit('send_message', { text });
+    input.value = '';
+}
 
-    function addChatMessage(msg) {
-        const isOwn = msg.socketId === mySocketId;
-        const container = document.getElementById('chatMessages');
+function addChatMessage(msg) {
+    const isOwn = msg.socketId === mySocketId;
+    const container = document.getElementById('chatMessages');
 
-        const el = document.createElement('div');
-        el.className = `chat-msg${isOwn ? ' own' : ''}`;
-        el.innerHTML = `
+    const el = document.createElement('div');
+    el.className = `chat-msg${isOwn ? ' own' : ''}`;
+    el.innerHTML = `
     <div class="chat-msg-avatar">${escapeHTML(msg.avatar)}</div>
     <div class="chat-msg-body">
       <div class="chat-msg-name" style="color:${escapeHTML(msg.color)}">${escapeHTML(msg.username)}</div>
       <div class="chat-msg-text">${escapeHTML(msg.text)}</div>
     </div>
   `;
-        container.appendChild(el);
-        container.scrollTop = container.scrollHeight;
-    }
+    container.appendChild(el);
+    container.scrollTop = container.scrollHeight;
+}
 
-    function escapeHTML(str) {
-        if (typeof str !== 'string') return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
+function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
-    // ── Controles UI ─────────────────────────────────────────────
-    function copyCode() {
-        navigator.clipboard.writeText(roomCode).then(() => {
-            const btn = document.getElementById('btnCopy');
-            btn.textContent = '✅ Copiado!';
-            setTimeout(() => btn.textContent = '📋 Copiar', 2000);
-            showToast('📋 Código copiado!', 'success');
-        });
-    }
+// ── Controles UI ─────────────────────────────────────────────
+function copyCode() {
+    navigator.clipboard.writeText(roomCode).then(() => {
+        const btn = document.getElementById('btnCopy');
+        btn.textContent = '✅ Copiado!';
+        setTimeout(() => btn.textContent = '📋 Copiar', 2000);
+        showToast('📋 Código copiado!', 'success');
+    });
+}
 
-    function centerMap() {
-        const myMarker = markers[mySocketId];
-        if (myMarker) {
-            map.setView(myMarker.getLatLng(), 16, { animate: true });
+function centerMap() {
+    const myMarker = markers[mySocketId];
+    if (myMarker) {
+        map.setView(myMarker.getLatLng(), 16, { animate: true });
+    } else {
+        const allMarkers = Object.values(markers);
+        if (allMarkers.length > 0) {
+            const group = L.featureGroup(allMarkers);
+            map.fitBounds(group.getBounds().pad(0.2));
         } else {
-            const allMarkers = Object.values(markers);
-            if (allMarkers.length > 0) {
-                const group = L.featureGroup(allMarkers);
-                map.fitBounds(group.getBounds().pad(0.2));
-            } else {
-                showToast('📍 Nenhuma localização disponível ainda', 'info');
-            }
+            showToast('📍 Nenhuma localização disponível ainda', 'info');
         }
     }
+}
 
-    function togglePanel() {
-        panelOpen = !panelOpen;
-        const panel = document.getElementById('sidePanel');
-        const fab = document.getElementById('fabPanel');
-        const toggle = document.getElementById('panelToggle');
+function togglePanel() {
+    panelOpen = !panelOpen;
+    const panel = document.getElementById('sidePanel');
+    const fab = document.getElementById('fabPanel');
+    const toggle = document.getElementById('panelToggle');
 
-        panel.classList.toggle('collapsed', !panelOpen);
-        fab.style.display = panelOpen ? 'none' : 'flex';
-        toggle.textContent = panelOpen ? '◀' : '▶';
+    panel.classList.toggle('collapsed', !panelOpen);
+    fab.style.display = panelOpen ? 'none' : 'flex';
+    toggle.textContent = panelOpen ? '◀' : '▶';
+}
+
+function leaveRoom() {
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    socket.disconnect();
+    sessionStorage.clear();
+    window.location.href = '/';
+}
+
+// ── Toast ────────────────────────────────────────────────────
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3200);
+}
+
+// ── TomTom: Radares e Pedágios ──────────────────────────────
+
+
+// ── Overpass: Radares e Pedágios ────────────────────────────
+let loadedNodes = new Set();  // Cache de IDs de nós já carregados
+let lastFetchParams = { center: null, zoom: 0 }; // Cache de parâmetros da última busca
+
+async function fetchOverpassData() {
+    lastOverpassFetch = Date.now();
+    const zoom = map.getZoom();
+    const center = map.getCenter();
+
+    // 1. Verificar Zoom Mínimo (Aumentado para 13 para evitar timeouts em áreas muito grandes)
+    if (zoom < 13) {
+        // Se der zoom out demais, talvez limpar? Por enquanto mantemos para não piscar.
+        return;
     }
 
-    function leaveRoom() {
-        if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-        socket.disconnect();
-        sessionStorage.clear();
-        window.location.href = '/';
-    }
+    // 2. Cache de Requisição: Se moveu pouco (< 2km) e zoom é similar, não busca de novo
+    if (lastFetchParams.center) {
+        const dist = center.distanceTo(lastFetchParams.center); // em metros
+        const zoomDiff = Math.abs(zoom - lastFetchParams.zoom);
 
-    // ── Toast ────────────────────────────────────────────────────
-    function showToast(message, type = 'info') {
-        const container = document.getElementById('toastContainer');
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.textContent = message;
-        container.appendChild(toast);
-        setTimeout(() => toast.remove(), 3200);
-    }
-
-    // ── TomTom: Radares e Pedágios ──────────────────────────────
-
-
-    // ── Overpass: Radares e Pedágios ────────────────────────────
-    let loadedNodes = new Set();  // Cache de IDs de nós já carregados
-    let lastFetchParams = { center: null, zoom: 0 }; // Cache de parâmetros da última busca
-
-    async function fetchOverpassData() {
-        lastOverpassFetch = Date.now();
-        const zoom = map.getZoom();
-        const center = map.getCenter();
-
-        // 1. Verificar Zoom Mínimo (Aumentado para 13 para evitar timeouts em áreas muito grandes)
-        if (zoom < 13) {
-            // Se der zoom out demais, talvez limpar? Por enquanto mantemos para não piscar.
+        if (dist < 2000 && zoomDiff === 0) {
             return;
         }
+    }
 
-        // 2. Cache de Requisição: Se moveu pouco (< 2km) e zoom é similar, não busca de novo
-        if (lastFetchParams.center) {
-            const dist = center.distanceTo(lastFetchParams.center); // em metros
-            const zoomDiff = Math.abs(zoom - lastFetchParams.zoom);
+    // Atualizar cache de params
+    lastFetchParams = { center, zoom };
 
-            if (dist < 2000 && zoomDiff === 0) {
-                return;
-            }
-        }
+    const bounds = map.getBounds();
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
 
-        // Atualizar cache de params
-        lastFetchParams = { center, zoom };
+    // Overpass bbox: south,west,north,east
+    const bbox = `${sw.lat},${sw.lng},${ne.lat},${ne.lng}`;
 
-        const bounds = map.getBounds();
-        const sw = bounds.getSouthWest();
-        const ne = bounds.getNorthEast();
-
-        // Overpass bbox: south,west,north,east
-        const bbox = `${sw.lat},${sw.lng},${ne.lat},${ne.lng}`;
-
-        const query = `
+    const query = `
         [out:json][timeout:90];
         (
           node["highway"="speed_camera"](${bbox});
@@ -948,105 +939,105 @@ function updateUserOnMap(socketId, user) {
         out body;
     `;
 
+    try {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 95000);
+
+        // Tentar endpoint principal
         try {
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 95000);
-
-            // Tentar endpoint principal
-            try {
-                const res = await fetch('https://overpass-api.de/api/interpreter', {
-                    method: 'POST',
-                    body: query,
-                    signal: controller.signal
-                });
-                clearTimeout(id);
-                if (!res.ok) throw new Error(`Status ${res.status}`);
-                const data = await res.json();
-                processOverpassData(data);
-            } catch (e) {
-                console.warn("Overpass Main failed, trying backup...", e.message);
-                // Backup: Kumi Systems (apenas se falhar o principal)
-                const resBackup = await fetch('https://overpass.kumi.systems/api/interpreter', {
-                    method: 'POST',
-                    body: query
-                });
-                if (!resBackup.ok) throw new Error(`Backup Status ${resBackup.status}`);
-                const dataBackup = await resBackup.json();
-                processOverpassData(dataBackup);
-            }
-        } catch (err) {
-            console.warn('Overpass API error:', err.message);
-        }
-    }
-
-    function processOverpassData(data) {
-        if (!data.elements) return;
-
-        let newCount = 0;
-        data.elements.forEach(el => {
-            // 3. Cache de Marcadores
-            if (loadedNodes.has(el.id)) return;
-
-            const lat = el.lat;
-            const lng = el.lon;
-            const tags = el.tags || {};
-
-            let type = '';
-            let iconHtml = '';
-            let popupTitle = '';
-
-            if (tags.highway === 'speed_camera') {
-                type = 'radar';
-                iconHtml = '<div class="tomtom-marker radar-marker">📷</div>';
-                popupTitle = '📷 Radar de velocidade';
-                if (tags.maxspeed) popupTitle += `<br>Limite: ${tags.maxspeed}`;
-            } else if (tags.barrier === 'toll_booth') {
-                type = 'toll';
-                iconHtml = '<div class="tomtom-marker toll-marker">💰</div>';
-                popupTitle = `💰 ${escapeHTML(tags.name || 'Pedágio')}`;
-                if (tags.fee) popupTitle += `<br>Tarifa: ${tags.fee}`;
-            }
-
-            if (!type) return;
-
-            const icon = L.divIcon({
-                html: iconHtml,
-                className: '',
-                iconSize: [28, 28],
-                iconAnchor: [14, 14],
+            const res = await fetch('https://overpass-api.de/api/interpreter', {
+                method: 'POST',
+                body: query,
+                signal: controller.signal
             });
+            clearTimeout(id);
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            const data = await res.json();
+            processOverpassData(data);
+        } catch (e) {
+            console.warn("Overpass Main failed, trying backup...", e.message);
+            // Backup: Kumi Systems (apenas se falhar o principal)
+            const resBackup = await fetch('https://overpass.kumi.systems/api/interpreter', {
+                method: 'POST',
+                body: query
+            });
+            if (!resBackup.ok) throw new Error(`Backup Status ${resBackup.status}`);
+            const dataBackup = await resBackup.json();
+            processOverpassData(dataBackup);
+        }
+    } catch (err) {
+        console.warn('Overpass API error:', err.message);
+    }
+}
 
-            const marker = L.marker([lat, lng], { icon })
-                .addTo(map)
-                .bindPopup(popupTitle, { className: 'dark-popup' });
+function processOverpassData(data) {
+    if (!data.elements) return;
 
-            if (type === 'radar') speedCamMarkers.push(marker);
-            else tollMarkers.push(marker);
+    let newCount = 0;
+    data.elements.forEach(el => {
+        // 3. Cache de Marcadores
+        if (loadedNodes.has(el.id)) return;
 
-            loadedNodes.add(el.id);
-            newCount++;
+        const lat = el.lat;
+        const lng = el.lon;
+        const tags = el.tags || {};
+
+        let type = '';
+        let iconHtml = '';
+        let popupTitle = '';
+
+        if (tags.highway === 'speed_camera') {
+            type = 'radar';
+            iconHtml = '<div class="tomtom-marker radar-marker">📷</div>';
+            popupTitle = '📷 Radar de velocidade';
+            if (tags.maxspeed) popupTitle += `<br>Limite: ${tags.maxspeed}`;
+        } else if (tags.barrier === 'toll_booth') {
+            type = 'toll';
+            iconHtml = '<div class="tomtom-marker toll-marker">💰</div>';
+            popupTitle = `💰 ${escapeHTML(tags.name || 'Pedágio')}`;
+            if (tags.fee) popupTitle += `<br>Tarifa: ${tags.fee}`;
+        }
+
+        if (!type) return;
+
+        const icon = L.divIcon({
+            html: iconHtml,
+            className: '',
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
         });
-    }
 
-    function clearOverpassMarkers() {
-        speedCamMarkers.forEach(m => map.removeLayer(m));
-        tollMarkers.forEach(m => map.removeLayer(m));
-        speedCamMarkers = [];
-        tollMarkers = [];
-        loadedNodes.clear();
-        lastFetchParams = { center: null, zoom: 0 };
-    }
+        const marker = L.marker([lat, lng], { icon })
+            .addTo(map)
+            .bindPopup(popupTitle, { className: 'dark-popup' });
 
-    function toggleOverpass() {
-        overpassEnabled = !overpassEnabled;
-        const btn = document.getElementById('btnToggleTomTom');
-        if (btn) {
-            btn.textContent = overpassEnabled ? '📷 Radares: ON' : '📷 Radares: OFF';
-            btn.classList.toggle('active', overpassEnabled);
-        }
-        if (overpassEnabled) {
-            fetchOverpassData();
-            clearOverpassMarkers();
-        }
+        if (type === 'radar') speedCamMarkers.push(marker);
+        else tollMarkers.push(marker);
+
+        loadedNodes.add(el.id);
+        newCount++;
+    });
+}
+
+function clearOverpassMarkers() {
+    speedCamMarkers.forEach(m => map.removeLayer(m));
+    tollMarkers.forEach(m => map.removeLayer(m));
+    speedCamMarkers = [];
+    tollMarkers = [];
+    loadedNodes.clear();
+    lastFetchParams = { center: null, zoom: 0 };
+}
+
+function toggleOverpass() {
+    overpassEnabled = !overpassEnabled;
+    const btn = document.getElementById('btnToggleTomTom');
+    if (btn) {
+        btn.textContent = overpassEnabled ? '📷 Radares: ON' : '📷 Radares: OFF';
+        btn.classList.toggle('active', overpassEnabled);
     }
+    if (overpassEnabled) {
+        fetchOverpassData();
+        clearOverpassMarkers();
+    }
+}
 }
