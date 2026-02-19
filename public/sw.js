@@ -11,7 +11,7 @@ const ASSETS = [
     '/icon-512.png',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-    'https://cdn.socket.io/4.7.2/socket.io.min.js'
+    '/socket.io/socket.io.js'
 ];
 
 self.addEventListener('install', (e) => {
