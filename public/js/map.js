@@ -28,12 +28,11 @@ let myLastLat = null;
 let myLastLng = null;
 let settingDestByClick = false; // Modo de clique no mapa
 
-// ── TomTom – Radares e Pedágios ─────────────────────────────
-const TOMTOM_KEY = 'X0nXXiH9EJtL0plX32MaMiHoNsVh8xVJ';
-let tomtomEnabled = true;
+// ── Overpass API (OpenStreetMap) – Radares e Pedágios ──────
+let overpassEnabled = true;
 let speedCamMarkers = [];     // Array de L.marker para radares
 let tollMarkers = [];         // Array de L.marker para pedágios
-let lastTomtomFetch = 0;      // Debounce
+let lastOverpassFetch = 0;    // Debounce
 
 // ── Inicialização ────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -72,9 +71,9 @@ function initMap() {
 }
 
 function onMapMoveEnd() {
-    if (!tomtomEnabled) return;
-    if (Date.now() - lastTomtomFetch < 5000) return; // Debounce 5s
-    fetchTomTomData();
+    if (!overpassEnabled) return;
+    if (Date.now() - lastOverpassFetch < 5000) return; // Debounce 5s
+    fetchOverpassData();
 }
 
 function onMapClick(e) {
@@ -709,129 +708,132 @@ function showToast(message, type = 'info') {
 }
 
 // ── TomTom: Radares e Pedágios ──────────────────────────────
-async function fetchTomTomData() {
-    lastTomtomFetch = Date.now();
-    const bounds = map.getBounds();
-    const zoom = map.getZoom();
 
-    // Só buscar se zoom >= 11 (evitar muitas chamadas em zoom longe)
-    if (zoom < 11) {
-        clearTomTomMarkers();
+
+// ── Overpass: Radares e Pedágios ────────────────────────────
+let loadedNodes = new Set();  // Cache de IDs de nós já carregados
+let lastFetchParams = { center: null, zoom: 0 }; // Cache de parâmetros da última busca
+
+async function fetchOverpassData() {
+    lastOverpassFetch = Date.now();
+    const zoom = map.getZoom();
+    const center = map.getCenter();
+
+    // 1. Verificar Zoom Mínimo
+    if (zoom < 12) {
+        // Se der zoom out demais, talvez limpar? Por enquanto mantemos para não piscar.
         return;
     }
 
-    await Promise.all([
-        fetchSpeedCameras(bounds),
-        fetchTollBooths(bounds),
-    ]);
-}
+    // 2. Cache de Requisição: Se moveu pouco (< 2km) e zoom é similar, não busca de novo
+    if (lastFetchParams.center) {
+        const dist = center.distanceTo(lastFetchParams.center); // em metros
+        const zoomDiff = Math.abs(zoom - lastFetchParams.zoom);
 
-async function fetchSpeedCameras(bounds) {
-    try {
-        const sw = bounds.getSouthWest();
-        const ne = bounds.getNorthEast();
-
-        const bbox = `${sw.lng},${sw.lat},${ne.lng},${ne.lat}`;
-
-        const url = `https://api.tomtom.com/traffic/services/5/incidentDetails?key=${TOMTOM_KEY}&bbox=${bbox}&categoryFilter=14`;
-
-        const res = await fetch(url);
-        if (!res.ok) {
-            console.warn("TomTom error:", res.status);
+        if (dist < 2000 && zoomDiff === 0) {
             return;
         }
-
-        const data = await res.json();
-
-        speedCamMarkers.forEach(m => map.removeLayer(m));
-        speedCamMarkers = [];
-
-        if (!data.incidents) return;
-
-        data.incidents.forEach(incident => {
-            if (!incident.geometry?.coordinates) return;
-
-            const [lng, lat] = incident.geometry.coordinates;
-
-            if (!isFinite(lat) || !isFinite(lng)) return;
-
-            const icon = L.divIcon({
-                html: '<div class="tomtom-marker radar-marker">📷</div>',
-                className: '',
-                iconSize: [28, 28],
-                iconAnchor: [14, 14],
-            });
-
-            const marker = L.marker([lat, lng], { icon })
-                .addTo(map)
-                .bindPopup('<b>📷 Radar de velocidade</b>', { className: 'dark-popup' });
-
-            speedCamMarkers.push(marker);
-        });
-
-    } catch (err) {
-        console.warn('TomTom Speed Cameras:', err.message);
     }
-}
 
-async function fetchTollBooths(bounds) {
+    // Atualizar cache de params
+    lastFetchParams = { center, zoom };
+
+    const bounds = map.getBounds();
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+
+    // Overpass bbox: south,west,north,east
+    const bbox = `${sw.lat},${sw.lng},${ne.lat},${ne.lng}`;
+
+    const query = `
+        [out:json][timeout:25];
+        (
+          node["highway"="speed_camera"](${bbox});
+          node["barrier"="toll_booth"](${bbox});
+        );
+        out body;
+    `;
+
     try {
-        const center = bounds.getCenter();
-        // Calcular raio em metros baseado no bounds
-        const radius = Math.min(Math.round(center.distanceTo(bounds.getNorthEast())), 50000);
+        const res = await fetch('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            body: query
+        });
 
-        const url = `https://api.tomtom.com/search/2/categorySearch/toll.json?key=${TOMTOM_KEY}&lat=${center.lat}&lon=${center.lng}&radius=${radius}&limit=50&language=pt-BR`;
-
-        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Overpass status ${res.status}`);
         const data = await res.json();
 
-        // Limpar marcadores antigos de pedágio
-        tollMarkers.forEach(m => map.removeLayer(m));
-        tollMarkers = [];
+        if (!data.elements) return;
 
-        if (!data.results) return;
+        let newCount = 0;
+        data.elements.forEach(el => {
+            // 3. Cache de Marcadores: Se já plotamos esse nó, ignora
+            if (loadedNodes.has(el.id)) return;
 
-        data.results.forEach(result => {
-            const { lat, lon: lng } = result.position;
+            const lat = el.lat;
+            const lng = el.lon;
+            const tags = el.tags || {};
+
+            let type = '';
+            let iconHtml = '';
+            let popupTitle = '';
+
+            if (tags.highway === 'speed_camera') {
+                type = 'radar';
+                iconHtml = '<div class="tomtom-marker radar-marker">📷</div>';
+                popupTitle = '📷 Radar de velocidade';
+                if (tags.maxspeed) popupTitle += `<br>Limite: ${tags.maxspeed}`;
+            } else if (tags.barrier === 'toll_booth') {
+                type = 'toll';
+                iconHtml = '<div class="tomtom-marker toll-marker">💰</div>';
+                popupTitle = `💰 ${escapeHTML(tags.name || 'Pedágio')}`;
+                if (tags.fee) popupTitle += `<br>Tarifa: ${tags.fee}`;
+            }
+
+            if (!type) return;
 
             const icon = L.divIcon({
-                html: '<div class="tomtom-marker toll-marker">💰</div>',
+                html: iconHtml,
                 className: '',
                 iconSize: [28, 28],
                 iconAnchor: [14, 14],
             });
 
-            const name = result.poi?.name || 'Pedágio';
-            const addr = result.address?.freeformAddress || '';
-
             const marker = L.marker([lat, lng], { icon })
                 .addTo(map)
-                .bindPopup(`<b>💰 ${escapeHTML(name)}</b>${addr ? '<br>' + escapeHTML(addr) : ''}`, { className: 'dark-popup' });
+                .bindPopup(popupTitle, { className: 'dark-popup' });
 
-            tollMarkers.push(marker);
+            if (type === 'radar') speedCamMarkers.push(marker);
+            else tollMarkers.push(marker);
+
+            loadedNodes.add(el.id);
+            newCount++;
         });
+
     } catch (err) {
-        console.warn('TomTom Toll Booths:', err.message);
+        console.warn('Overpass API error:', err.message);
     }
 }
 
-function clearTomTomMarkers() {
+function clearOverpassMarkers() {
     speedCamMarkers.forEach(m => map.removeLayer(m));
     tollMarkers.forEach(m => map.removeLayer(m));
     speedCamMarkers = [];
     tollMarkers = [];
+    loadedNodes.clear();
+    lastFetchParams = { center: null, zoom: 0 };
 }
 
-function toggleTomTom() {
-    tomtomEnabled = !tomtomEnabled;
+function toggleOverpass() {
+    overpassEnabled = !overpassEnabled;
     const btn = document.getElementById('btnToggleTomTom');
     if (btn) {
-        btn.textContent = tomtomEnabled ? '📷 Radares: ON' : '📷 Radares: OFF';
-        btn.classList.toggle('active', tomtomEnabled);
+        btn.textContent = overpassEnabled ? '📷 Radares: ON' : '📷 Radares: OFF';
+        btn.classList.toggle('active', overpassEnabled);
     }
-    if (tomtomEnabled) {
-        fetchTomTomData();
+    if (overpassEnabled) {
+        fetchOverpassData();
     } else {
-        clearTomTomMarkers();
+        clearOverpassMarkers();
     }
 }
