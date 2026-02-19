@@ -353,34 +353,20 @@ function onLocationError(err) {
     };
     setGPSStatus('error', msgs[err.code] || '❌ Erro de GPS');
     showToast(`GPS: ${msgs[err.code]}`, 'error');
+    showToast(`GPS: ${msgs[err.code]}`, 'error');
 }
 
 function setGPSStatus(state, text) {
     const dot = document.getElementById('gpsDot');
     const label = document.getElementById('gpsText');
+    if (!dot || !label) return;
+
     dot.className = 'gps-dot';
     if (state === 'active') dot.classList.add('active');
     if (state === 'error') dot.classList.add('error');
     label.textContent = text;
 }
 
-users.forEach(user => {
-    addOrUpdateUserInList(user);
-    if (user.location) {
-        updateUserOnMap(user.socketId, user);
-    }
-});
-
-updateUserCount();
-updateNavUI();
-
-// Se já há destino definido, mostrar
-if (dest) {
-    destination = dest;
-    showDestinationOnMap(dest);
-}
-
-showGPSModal();
 }
 
 function updateNavUI() {
