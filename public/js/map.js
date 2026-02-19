@@ -497,6 +497,21 @@ function clearDestinationUI() {
 }
 
 // ── Navegação: OSRM Routing ─────────────────────────────────
+// ── Utilitários de Ícone ─────────────────────────────────────
+function createUserIcon(avatar, color) {
+    return L.divIcon({
+        html: `<div class="user-marker" style="background-color: ${color}">
+                 <div class="marker-arrow"></div>
+                 <div class="user-emoji">${avatar}</div>
+               </div>`,
+        className: 'custom-marker-container',
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
+        popupAnchor: [0, -22]
+    });
+}
+
+// ── Roteamento (OSRM) ────────────────────────────────────────
 async function calculateRoute(fromLat, fromLng, toLat, toLng) {
     lastRouteCalc = Date.now();
 
