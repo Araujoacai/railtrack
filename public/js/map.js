@@ -615,7 +615,50 @@ function showSearchResults(data) {
         resultsEl.appendChild(div);
     });
 }
+}
 
+// Chamada pelo botão de busca no HTML (id="destSearch")
+async function searchDestination() {
+    const input = document.getElementById('destSearch');
+    const query = input ? input.value.trim() : '';
+    if (!query) return;
+
+    const resultsEl = document.getElementById('navResults');
+    if (!resultsEl) return;
+
+    resultsEl.style.display = '';
+    resultsEl.innerHTML = '<div class="nav-result-item">🔍 Buscando...</div>';
+
+    try {
+        const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=br`
+        );
+        const data = await res.json();
+
+        if (!data.length) {
+            resultsEl.innerHTML = '<div class="nav-result-item">❌ Nenhum resultado encontrado</div>';
+            return;
+        }
+
+        resultsEl.innerHTML = '';
+        data.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'nav-result-item';
+            div.textContent = item.display_name.split(',').slice(0, 4).join(', ');
+            div.onclick = () => {
+                const lat = parseFloat(item.lat);
+                const lng = parseFloat(item.lon);
+                const name = item.display_name.split(',').slice(0, 3).join(', ');
+                socket.emit('set_destination', { lat, lng, name });
+                resultsEl.style.display = 'none';
+                if (input) input.value = '';
+            };
+            resultsEl.appendChild(div);
+        });
+    } catch (err) {
+        resultsEl.innerHTML = '<div class="nav-result-item">❌ Erro na busca</div>';
+    }
+}
 
 function enableMapClick() {
     settingDestByClick = true;
