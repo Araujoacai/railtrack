@@ -51,7 +51,7 @@ app.use(helmet({
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "https://*.basemaps.cartocdn.com", "data:"],
-            connectSrc: ["'self'", "wss:", "ws:", "https://router.project-osrm.org", "https://nominatim.openstreetmap.org", "https://overpass-api.de"],
+            connectSrc: ["'self'", "wss:", "ws:", "https://router.project-osrm.org", "https://nominatim.openstreetmap.org", "https://overpass-api.de", "https://overpass.kumi.systems"],
         },
     },
 }));
