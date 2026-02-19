@@ -615,7 +615,6 @@ function showSearchResults(data) {
         resultsEl.appendChild(div);
     });
 }
-}
 
 // Chamada pelo botão de busca no HTML (id="destSearch")
 async function searchDestination() {
