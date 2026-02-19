@@ -719,8 +719,8 @@ async function fetchOverpassData() {
     const zoom = map.getZoom();
     const center = map.getCenter();
 
-    // 1. Verificar Zoom Mínimo
-    if (zoom < 12) {
+    // 1. Verificar Zoom Mínimo (Aumentado para 13 para evitar timeouts em áreas muito grandes)
+    if (zoom < 13) {
         // Se der zoom out demais, talvez limpar? Por enquanto mantemos para não piscar.
         return;
     }
@@ -746,7 +746,7 @@ async function fetchOverpassData() {
     const bbox = `${sw.lat},${sw.lng},${ne.lat},${ne.lng}`;
 
     const query = `
-        [out:json][timeout:25];
+        [out:json][timeout:90];
         (
           node["highway"="speed_camera"](${bbox});
           node["barrier"="toll_booth"](${bbox});
@@ -755,64 +755,83 @@ async function fetchOverpassData() {
     `;
 
     try {
-        const res = await fetch('https://overpass-api.de/api/interpreter', {
-            method: 'POST',
-            body: query
-        });
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 95000);
 
-        if (!res.ok) throw new Error(`Overpass status ${res.status}`);
-        const data = await res.json();
-
-        if (!data.elements) return;
-
-        let newCount = 0;
-        data.elements.forEach(el => {
-            // 3. Cache de Marcadores: Se já plotamos esse nó, ignora
-            if (loadedNodes.has(el.id)) return;
-
-            const lat = el.lat;
-            const lng = el.lon;
-            const tags = el.tags || {};
-
-            let type = '';
-            let iconHtml = '';
-            let popupTitle = '';
-
-            if (tags.highway === 'speed_camera') {
-                type = 'radar';
-                iconHtml = '<div class="tomtom-marker radar-marker">📷</div>';
-                popupTitle = '📷 Radar de velocidade';
-                if (tags.maxspeed) popupTitle += `<br>Limite: ${tags.maxspeed}`;
-            } else if (tags.barrier === 'toll_booth') {
-                type = 'toll';
-                iconHtml = '<div class="tomtom-marker toll-marker">💰</div>';
-                popupTitle = `💰 ${escapeHTML(tags.name || 'Pedágio')}`;
-                if (tags.fee) popupTitle += `<br>Tarifa: ${tags.fee}`;
-            }
-
-            if (!type) return;
-
-            const icon = L.divIcon({
-                html: iconHtml,
-                className: '',
-                iconSize: [28, 28],
-                iconAnchor: [14, 14],
+        // Tentar endpoint principal
+        try {
+            const res = await fetch('https://overpass-api.de/api/interpreter', {
+                method: 'POST',
+                body: query,
+                signal: controller.signal
             });
-
-            const marker = L.marker([lat, lng], { icon })
-                .addTo(map)
-                .bindPopup(popupTitle, { className: 'dark-popup' });
-
-            if (type === 'radar') speedCamMarkers.push(marker);
-            else tollMarkers.push(marker);
-
-            loadedNodes.add(el.id);
-            newCount++;
-        });
-
+            clearTimeout(id);
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            const data = await res.json();
+            processOverpassData(data);
+        } catch (e) {
+            console.warn("Overpass Main failed, trying backup...", e.message);
+            // Backup: Kumi Systems (apenas se falhar o principal)
+            const resBackup = await fetch('https://overpass.kumi.systems/api/interpreter', {
+                method: 'POST',
+                body: query
+            });
+            if (!resBackup.ok) throw new Error(`Backup Status ${resBackup.status}`);
+            const dataBackup = await resBackup.json();
+            processOverpassData(dataBackup);
+        }
     } catch (err) {
         console.warn('Overpass API error:', err.message);
     }
+}
+
+function processOverpassData(data) {
+    if (!data.elements) return;
+
+    let newCount = 0;
+    data.elements.forEach(el => {
+        // 3. Cache de Marcadores
+        if (loadedNodes.has(el.id)) return;
+
+        const lat = el.lat;
+        const lng = el.lon;
+        const tags = el.tags || {};
+
+        let type = '';
+        let iconHtml = '';
+        let popupTitle = '';
+
+        if (tags.highway === 'speed_camera') {
+            type = 'radar';
+            iconHtml = '<div class="tomtom-marker radar-marker">📷</div>';
+            popupTitle = '📷 Radar de velocidade';
+            if (tags.maxspeed) popupTitle += `<br>Limite: ${tags.maxspeed}`;
+        } else if (tags.barrier === 'toll_booth') {
+            type = 'toll';
+            iconHtml = '<div class="tomtom-marker toll-marker">💰</div>';
+            popupTitle = `💰 ${escapeHTML(tags.name || 'Pedágio')}`;
+            if (tags.fee) popupTitle += `<br>Tarifa: ${tags.fee}`;
+        }
+
+        if (!type) return;
+
+        const icon = L.divIcon({
+            html: iconHtml,
+            className: '',
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+        });
+
+        const marker = L.marker([lat, lng], { icon })
+            .addTo(map)
+            .bindPopup(popupTitle, { className: 'dark-popup' });
+
+        if (type === 'radar') speedCamMarkers.push(marker);
+        else tollMarkers.push(marker);
+
+        loadedNodes.add(el.id);
+        newCount++;
+    });
 }
 
 function clearOverpassMarkers() {
