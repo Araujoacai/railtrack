@@ -36,8 +36,9 @@ const SmartCamera = {
     lastPosition: null,
     lastPositionTime: 0,
     lastSpeed: 0,
-    lastHeading: 0,
+    lastHeading: null,
     smoothedBearing: 0,  // bearing interpolado (evita saltos)
+    _cameraMoving: false, // flag para ignorar eventos programáticos
 
     enable() {
         this.mode = 'FOLLOW';
@@ -136,8 +137,8 @@ function initMap() {
     // Clique no mapa para definir destino (apenas host)
     map.on('click', onMapClick);
 
-    // Parar follow ao interagir manualmente
-    map.on('dragstart zoomstart', () => {
+    // Parar follow APENAS ao arrastar manualmente (não em movimentos programáticos)
+    map.on('dragstart', () => {
         if (SmartCamera.shouldFollow()) SmartCamera.disable();
     });
 
@@ -470,8 +471,9 @@ function updateFollowButtonUI() {
 function centerMap() {
     if (!myLastLat || !myLastLng) { requestGPS(); return; }
     SmartCamera.enable();
-    map.flyTo([myLastLat, myLastLng], getDynamicZoom(SmartCamera.lastSpeed), {
-        animate: true, duration: 1.2
+    // Usar setView para não disparar animação que poderia interferir no follow
+    map.setView([myLastLat, myLastLng], getDynamicZoom(SmartCamera.lastSpeed), {
+        animate: true
     });
 }
 
@@ -795,50 +797,61 @@ function updateUserOnMap(socketId, user) {
         if (socketId === mySocketId && SmartCamera.shouldFollow()) {
             const now = Date.now();
             const dt = (now - SmartCamera.lastPositionTime) / 1000; // segundos
-            const speed = calculateSpeed(newLatLng, SmartCamera.lastPosition, dt);
-            SmartCamera.lastSpeed = speed;
-            SmartCamera.lastHeading = user.location?.heading ?? SmartCamera.lastHeading;
 
-            // Throttle adaptativo: + rápido = + freqüente
-            const throttleMs = speed > 60 ? 400 : speed > 20 ? 600 : 900;
-            if (now - SmartCamera.throttle < throttleMs) {
-                // Atualizar posição mesmo sem mover câmera
-                SmartCamera.lastPosition = newLatLng;
-                SmartCamera.lastPositionTime = now;
-                return;
+            // Converter para L.latLng para ter acesso a .lat/.lng
+            const currentLatLng = L.latLng(lat, lng);
+
+            const speed = calculateSpeed(currentLatLng, SmartCamera.lastPosition, dt);
+            SmartCamera.lastSpeed = speed;
+
+            // Heading: preferir dado do GPS/Mapa (movimento), fallback para bússola
+            const gpsHeading = user.location?.heading;
+            if (gpsHeading !== null && gpsHeading !== undefined && speed > 2) {
+                SmartCamera.lastHeading = gpsHeading;
             }
-            SmartCamera.throttle = now;
-            SmartCamera.lastPosition = newLatLng;
+
+            // Throttle adaptativo: + rápido = + frequente (não interrompe o follow, só limita a taxa)
+            const throttleMs = speed > 60 ? 300 : speed > 20 ? 500 : 800;
+            const shouldUpdateCamera = (now - SmartCamera.throttle) >= throttleMs;
+
+            // Sempre atualiza a posição de referência
+            SmartCamera.lastPosition = currentLatLng;
             SmartCamera.lastPositionTime = now;
 
-            // Look-ahead: adiantar o ponto-alvo na direção do movimento
-            const headingRad = (SmartCamera.lastHeading * Math.PI) / 180;
-            const lookAhead = speed * 0.000008; // escala proporcional à velocidade
-            const targetLat = newLatLng.lat + Math.cos(headingRad) * lookAhead;
-            const targetLng = newLatLng.lng + Math.sin(headingRad) * lookAhead;
-            const target = L.latLng(targetLat, targetLng);
+            if (shouldUpdateCamera) {
+                SmartCamera.throttle = now;
 
-            // Só atua se o alvo saiu da viewport
-            if (!map.getBounds().contains(target)) {
+                // Look-ahead: adiantar o ponto-alvo na direção do movimento
+                let target = currentLatLng;
+                if (SmartCamera.lastHeading != null && speed > 2) {
+                    const headingRad = (SmartCamera.lastHeading * Math.PI) / 180;
+                    const lookAhead = speed * 0.000008; // escala proporcional à velocidade
+                    target = L.latLng(
+                        lat + Math.cos(headingRad) * lookAhead,
+                        lng + Math.sin(headingRad) * lookAhead
+                    );
+                }
+
+                // Sempre seguir o usuário (sem condição de getBounds)
                 const targetZoom = getDynamicZoom(speed);
                 const currentZoom = map.getZoom();
 
                 if (Math.abs(targetZoom - currentZoom) >= 1) {
-                    map.flyTo(target, targetZoom, { animate: true, duration: 0.8, easeLinearity: 0.25 });
+                    map.flyTo(target, targetZoom, { animate: true, duration: 0.6, easeLinearity: 0.25 });
                 } else {
-                    map.panTo(target, { animate: true, duration: 0.8, easeLinearity: 0.25 });
+                    map.panTo(target, { animate: true, duration: 0.5, easeLinearity: 0.25 });
                 }
-            }
 
-            // Rotação suave do mapa baseada em heading
-            // Só rotaciona se estiver em movimento (> 5 km/h) e heading válido
-            if (map.setBearing && speed > 5 && SmartCamera.lastHeading != null) {
-                SmartCamera.smoothedBearing = interpolateBearing(
-                    SmartCamera.smoothedBearing,
-                    SmartCamera.lastHeading,
-                    0.15  // alpha: 0.1 = mais suave, 0.3 = mais rápido
-                );
-                map.setBearing(SmartCamera.smoothedBearing);
+                // Rotação suave do mapa baseada em heading
+                // Só rotaciona se estiver em movimento (> 3 km/h) e heading válido
+                if (map.setBearing && speed > 3 && SmartCamera.lastHeading != null) {
+                    SmartCamera.smoothedBearing = interpolateBearing(
+                        SmartCamera.smoothedBearing,
+                        SmartCamera.lastHeading,
+                        0.15  // alpha: 0.1 = mais suave, 0.3 = mais rápido
+                    );
+                    map.setBearing(SmartCamera.smoothedBearing);
+                }
             }
         }
 
