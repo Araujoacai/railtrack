@@ -28,9 +28,41 @@ let settingDestByClick = false;
 // Controle de Navegação
 let isNavigating = false;
 
-// Follow estilo Google Maps
-let isFollowingUser = false;
-let followThrottle = 0;
+// ── SmartCamera Pro ────────────────────────────────
+const SmartCamera = {
+    mode: 'FREE',        // 'FOLLOW' | 'FREE'
+    initialized: false,
+    throttle: 0,
+    lastPosition: null,
+    lastPositionTime: 0, // timestamp do último fix (para speed correta)
+    lastSpeed: 0,
+    lastHeading: 0,
+
+    enable() {
+        this.mode = 'FOLLOW';
+        updateFollowButtonUI();
+    },
+    disable() {
+        this.mode = 'FREE';
+        updateFollowButtonUI();
+    },
+    shouldFollow() {
+        return this.mode === 'FOLLOW';
+    }
+};
+
+function getDynamicZoom(speed) {
+    if (speed > 80) return 15;
+    if (speed > 40) return 16;
+    if (speed > 15) return 17;
+    return 18;
+}
+
+function calculateSpeed(newPos, oldPos, dt) {
+    if (!oldPos || dt <= 0) return 0;
+    const dist = map.distance(oldPos, newPos);  // metros
+    return (dist / dt) * 3.6;                   // km/h
+}
 
 
 async function requestWakeLock() {
@@ -72,12 +104,9 @@ function initMap() {
     // Clique no mapa para definir destino (apenas host)
     map.on('click', onMapClick);
 
-    // Parar follow ao interagir manualmente (estilo Google Maps)
+    // Parar follow ao interagir manualmente
     map.on('dragstart zoomstart', () => {
-        if (isFollowingUser) {
-            isFollowingUser = false;
-            updateFollowButtonUI();
-        }
+        if (SmartCamera.shouldFollow()) SmartCamera.disable();
     });
 
     // Ajustar mapa quando redimensionar
@@ -346,12 +375,11 @@ function onLocationSuccess(pos) {
 
     socket.emit('update_location', { lat, lng, accuracy, heading, speed });
 
-    // Centralizar apenas no primeiro fix de GPS e ativar follow automaticamente
-    if (!initialCenterDone) {
+    // Primeiro GPS fix: centralizar e ativar SmartCamera
+    if (!SmartCamera.initialized) {
         map.setView([lat, lng], 18);
-        initialCenterDone = true;
-        isFollowingUser = true;
-        updateFollowButtonUI();
+        SmartCamera.initialized = true;
+        SmartCamera.enable();
     }
 
     // Recalcular rota se há destino (a cada 10 segundos)
@@ -387,14 +415,11 @@ function setGPSStatus(state, text) {
 // ── Controle de Navegação ────────────────────────────────────
 function startNavigation() {
     isNavigating = true;
-    // Ativa follow ao iniciar rota
-    isFollowingUser = true;
-    updateFollowButtonUI();
+    SmartCamera.enable();
 
     if (myLastLat && myLastLng) {
-        map.flyTo([myLastLat, myLastLng], 18, {
-            animate: true,
-            duration: 1.5
+        map.flyTo([myLastLat, myLastLng], getDynamicZoom(SmartCamera.lastSpeed), {
+            animate: true, duration: 1.5
         });
     }
 }
@@ -403,29 +428,19 @@ function stopNavigation() {
     isNavigating = false;
 }
 
-// Atualiza visual do botão de centralizar (estilo Google Maps)
 function updateFollowButtonUI() {
     const btn = document.querySelector('.fab-center');
     if (!btn) return;
-    if (isFollowingUser) {
-        btn.classList.add('active');
-    } else {
-        btn.classList.remove('active');
-    }
+    btn.classList.toggle('active', SmartCamera.shouldFollow());
 }
 
-// Acionado pelo botão 🎯: recentra e reativa follow (igual Google Maps)
+// Botão 🎯: recentra e reativa follow
 function centerMap() {
-    if (myLastLat && myLastLng) {
-        isFollowingUser = true;
-        updateFollowButtonUI();
-        map.flyTo([myLastLat, myLastLng], 18, {
-            animate: true,
-            duration: 1.2
-        });
-    } else {
-        requestGPS();
-    }
+    if (!myLastLat || !myLastLng) { requestGPS(); return; }
+    SmartCamera.enable();
+    map.flyTo([myLastLat, myLastLng], getDynamicZoom(SmartCamera.lastSpeed), {
+        animate: true, duration: 1.2
+    });
 }
 
 // ── Bússola (Device Orientation) ─────────────────────────────
@@ -744,21 +759,45 @@ function updateUserOnMap(socketId, user) {
         routePoints[socketId].push(newLatLng);
         routes[socketId].setLatLngs(routePoints[socketId]);
 
-        // Follow Me estilo Google Maps
-        if (socketId === mySocketId && isFollowingUser) {
+        // ── SmartCamera Pro: follow inteligente ─────────────────
+        if (socketId === mySocketId && SmartCamera.shouldFollow()) {
             const now = Date.now();
-            // Throttle: no máximo 1 atualização a cada 800ms
-            if (now - followThrottle < 800) return;
-            followThrottle = now;
+            const dt = (now - SmartCamera.lastPositionTime) / 1000; // segundos
+            const speed = calculateSpeed(newLatLng, SmartCamera.lastPosition, dt);
+            SmartCamera.lastSpeed = speed;
+            SmartCamera.lastHeading = user.location?.heading ?? SmartCamera.lastHeading;
 
-            // Só move o mapa se o marcador saiu da viewport
-            const bounds = map.getBounds();
-            if (!bounds.contains(newLatLng)) {
-                map.panTo(newLatLng, {
-                    animate: true,
-                    duration: 0.8,
-                    easeLinearity: 0.25
-                });
+            // Throttle adaptativo: + rápido = + freqüente
+            const throttleMs = speed > 60 ? 400 : speed > 20 ? 600 : 900;
+            if (now - SmartCamera.throttle < throttleMs) {
+                // Atualizar posição mesmo sem mover câmera
+                SmartCamera.lastPosition = newLatLng;
+                SmartCamera.lastPositionTime = now;
+                return;
+            }
+            SmartCamera.throttle = now;
+            SmartCamera.lastPosition = newLatLng;
+            SmartCamera.lastPositionTime = now;
+
+            // Look-ahead: adiantar o ponto-alvo na direção do movimento
+            const headingRad = (SmartCamera.lastHeading * Math.PI) / 180;
+            const lookAhead = speed * 0.000008; // escala proporcional à velocidade
+            const targetLat = newLatLng.lat + Math.cos(headingRad) * lookAhead;
+            const targetLng = newLatLng.lng + Math.sin(headingRad) * lookAhead;
+            const target = L.latLng(targetLat, targetLng);
+
+            // Só atua se o alvo saiu da viewport
+            if (!map.getBounds().contains(target)) {
+                const targetZoom = getDynamicZoom(speed);
+                const currentZoom = map.getZoom();
+
+                if (Math.abs(targetZoom - currentZoom) >= 1) {
+                    // Zoom muda: flyTo (anima zoom + pan)
+                    map.flyTo(target, targetZoom, { animate: true, duration: 0.8, easeLinearity: 0.25 });
+                } else {
+                    // Zoom igual: panTo (sem recarregar tiles = sem flash)
+                    map.panTo(target, { animate: true, duration: 0.8, easeLinearity: 0.25 });
+                }
             }
         }
 
