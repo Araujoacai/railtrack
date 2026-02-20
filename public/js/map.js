@@ -38,6 +38,7 @@ const SmartCamera = {
     lastSpeed: 0,
     lastHeading: null,
     smoothedBearing: 0,  // bearing interpolado (evita saltos)
+    lastMarkerHeading: null, // último heading suavizado para o marcador
     _cameraMoving: false, // flag para ignorar eventos programáticos
 
     enable() {
@@ -576,14 +577,30 @@ function centerMap() {
 }
 
 // ── Bússola (Device Orientation) ─────────────────────────────
-window.addEventListener('deviceorientation', (event) => {
+function handleOrientation(event) {
     if (event.alpha !== null && myUser && myUser.socketId) {
         // Alpha é a direção da bússola (0 = Norte)
-        // Precisamos inverter e compensar para CSS rotate
         const heading = event.webkitCompassHeading || (360 - event.alpha);
-        updateMyMarkerHeading(heading);
+
+        // Aplicar suavização (Low-Pass Filter)
+        if (SmartCamera.lastMarkerHeading === null) {
+            SmartCamera.lastMarkerHeading = heading;
+        } else {
+            // Fator 0.15 para um equilíbrio entre estabilidade e resposta rápida
+            SmartCamera.lastMarkerHeading = interpolateBearing(SmartCamera.lastMarkerHeading, heading, 0.15);
+        }
+
+        updateMyMarkerHeading(SmartCamera.lastMarkerHeading);
     }
-});
+}
+
+// Android costuma precisar do 'absolute' para ser preciso
+window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+
+// Fallback ou iOS
+if (!('ondeviceorientationabsolute' in window)) {
+    window.addEventListener('deviceorientation', handleOrientation, true);
+}
 
 function updateMyMarkerHeading(heading) {
     if (!mySocketId || !markers[mySocketId]) return;
