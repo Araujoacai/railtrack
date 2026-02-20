@@ -450,6 +450,30 @@ function onRoomReady(users, dest) {
         showDestinationOnMap(dest);
     }
 
+    // Tentar ativar GPS automaticamente se já tiver permissão
+    checkGPSPermissionAndStart();
+}
+
+async function checkGPSPermissionAndStart() {
+    if (navigator.permissions && navigator.permissions.query) {
+        try {
+            const result = await navigator.permissions.query({ name: 'geolocation' });
+            if (result.state === 'granted') {
+                console.log('[GPS] Permissão já concedida, ativando...');
+                requestGPS();
+                return;
+            }
+            // Se o estado mudar para granted enquanto a página está aberta
+            result.onchange = () => {
+                if (result.state === 'granted' && !gpsGranted) {
+                    requestGPS();
+                }
+            };
+        } catch (e) {
+            console.warn('[GPS] Erro ao consultar Permissions API:', e);
+        }
+    }
+    // Se não tiver permissão ou API não suportada, mostra o modal
     showGPSModal();
 }
 
