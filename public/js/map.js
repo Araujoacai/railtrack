@@ -80,10 +80,10 @@ function resetMapBearing() {
 }
 
 function getDynamicZoom(speed) {
-    if (speed > 80) return 15;
-    if (speed > 40) return 16;
-    if (speed > 15) return 17;
-    return 18;
+    if (speed > 90) return 16;
+    if (speed > 50) return 17;
+    if (speed > 20) return 18;
+    return 19;
 }
 
 function calculateSpeed(newPos, oldPos, dt) {
