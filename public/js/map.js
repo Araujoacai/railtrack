@@ -196,20 +196,51 @@ function restartGPSWatch() {
 }
 
 // ── Mapa Leaflet ─────────────────────────────────────────────
+let tileLayer = null; // referência do tile para trocar no tema
+
+const TILES = {
+    dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+};
+let currentTheme = localStorage.getItem('rt_theme') || 'dark';
+
+function toggleMapTheme() {
+    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('rt_theme', currentTheme);
+
+    // Trocar tile do mapa
+    if (tileLayer) {
+        tileLayer.setUrl(TILES[currentTheme]);
+    }
+
+    // Alternar classe no body
+    document.body.classList.toggle('light-theme', currentTheme === 'light');
+
+    // Atualizar ícone do botão
+    const btn = document.getElementById('btnTheme');
+    if (btn) btn.textContent = currentTheme === 'dark' ? '🌙' : '☀️';
+}
+
 function initMap() {
     map = L.map('map', {
         zoomControl: true,
         attributionControl: false,
-        rotate: true,        // habilita suporte a bearing (leaflet-rotate)
-        rotateControl: false,// sem botão de bússola padrão
+        rotate: true,
+        rotateControl: false,
     }).setView([-15.7801, -47.9292], 13);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    tileLayer = L.tileLayer(TILES[currentTheme], {
         maxZoom: 19,
         subdomains: 'abcd',
     }).addTo(map);
 
+    // Aplicar tema salvo na inicialização
+    document.body.classList.toggle('light-theme', currentTheme === 'light');
+    const btn = document.getElementById('btnTheme');
+    if (btn) btn.textContent = currentTheme === 'dark' ? '🌙' : '☀️';
+
     L.control.attribution({ prefix: false }).addTo(map);
+
 
     // Clique no mapa para definir destino (apenas host)
     map.on('click', onMapClick);

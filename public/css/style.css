@@ -877,7 +877,7 @@ body {
   margin-bottom: 20px !important;
 }
 
-/* Botão de localização (FAB) */
+/* Botão de localização (FAB) – agora com texto */
 .fab-center {
   position: fixed;
   bottom: 24px;
@@ -885,21 +885,26 @@ body {
   background: rgba(10, 14, 26, 0.9);
   color: var(--text-primary);
   border: 1px solid var(--border);
-  border-radius: 50%;
-  width: 48px;
-  height: 48px;
+  border-radius: 24px;
+  padding: 0 16px;
+  height: 36px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   cursor: pointer;
   z-index: 1000;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  backdrop-filter: blur(10px);
 }
 
 .fab-center:hover {
-  transform: scale(1.1);
+  transform: scale(1.06);
   background: var(--bg-card);
 }
 
@@ -912,6 +917,33 @@ body {
   border-color: #00D9FF;
   box-shadow: 0 0 15px rgba(0, 217, 255, 0.5);
   background: rgba(10, 14, 26, 0.95);
+}
+
+/* Botão de tema claro/escuro */
+.fab-theme {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 200;
+  background: rgba(10, 14, 26, 0.85);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.fab-theme:hover {
+  transform: scale(1.1) rotate(15deg);
+  background: var(--bg-card-hover);
 }
 
 /* Marcadores do mapa */
@@ -1299,4 +1331,95 @@ body {
 .fab-tomtom:hover {
   background: rgba(10, 14, 26, 0.95);
   transform: scale(1.05);
+}
+
+/* =============================================
+   TEMA CLARO
+   ============================================= */
+
+body.light-theme {
+  --bg-dark: #f0f4ff;
+  --bg-card: rgba(0, 0, 0, 0.04);
+  --bg-card-hover: rgba(0, 0, 0, 0.07);
+  --border: rgba(0, 0, 0, 0.12);
+  --border-focus: rgba(0, 100, 200, 0.5);
+  --text-primary: #0d1117;
+  --text-secondary: #556070;
+  --accent: #006EC7;
+  --accent-glow: rgba(0, 110, 199, 0.25);
+  background: #f0f4ff;
+  color: #0d1117;
+}
+
+body.light-theme .side-panel {
+  background: rgba(240, 244, 255, 0.95);
+}
+
+body.light-theme .fab-panel,
+body.light-theme .fab-center,
+body.light-theme .fab-theme,
+body.light-theme .fab-tomtom {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: #0d1117;
+}
+
+body.light-theme .fab-tomtom.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+body.light-theme .fab-center.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 15px rgba(0, 110, 199, 0.4);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+body.light-theme .toast {
+  background: rgba(255, 255, 255, 0.97);
+  color: #0d1117;
+}
+
+body.light-theme .modal-box {
+  background: rgba(255, 255, 255, 0.99);
+  color: #0d1117;
+}
+
+body.light-theme .leaflet-control-zoom {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+body.light-theme .leaflet-control-zoom a {
+  background: transparent !important;
+  color: #0d1117 !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+body.light-theme .leaflet-control-zoom a:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+body.light-theme .user-marker {
+  border-color: #333;
+}
+
+body.light-theme .marker-arrow {
+  border-bottom-color: #333;
+}
+
+/* Responsivo – ajustes do tema claro no mobile */
+@media (max-width: 480px) {
+  .fab-center {
+    bottom: 16px;
+    right: 16px;
+  }
+
+  .fab-center.active {
+    color: #00D9FF;
+    border-color: #00D9FF;
+    box-shadow: 0 0 15px rgba(0, 217, 255, 0.5);
+    background: rgba(10, 14, 26, 0.95);
+  }
 }
