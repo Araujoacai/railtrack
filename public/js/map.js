@@ -2,9 +2,7 @@
 // Estado Global
 let map, myUser, roomCode, isHost;
 let mySocketId = null;
-let markers = {}; // socketId -> Marker (Leaflet)
-let routes = {}; // socketId -> Polyline
-let routePoints = {}; // socketId -> [[lat,lng], ...]
+let markers = {}; // userId -> Marker (Leaflet)
 let destination = null; // {lat, lng, name}
 let navRouteLine = null; // Linha da rota OSRM
 let destMarker = null;   // Marcador 🏁 do destino no mapa
@@ -374,15 +372,15 @@ function initSocket() {
     });
 
     // Atualização de localização
-    socket.on('location_update', ({ socketId, user }) => {
-        updateUserOnMap(socketId, user);
-        updateUserInList(socketId, user);
+    socket.on('location_update', ({ socketId, userId, user }) => {
+        updateUserOnMap(userId, user);
+        updateUserInList(userId, user);
     });
 
     // Usuário saiu
-    socket.on('user_left', ({ socketId, username }) => {
-        removeUserFromMap(socketId);
-        removeUserFromList(socketId);
+    socket.on('user_left', ({ socketId, userId, username }) => {
+        removeUserFromMap(userId, socketId);
+        removeUserFromList(userId);
         showToast(`👋 ${username} saiu da sala`, 'info');
     });
 
@@ -439,7 +437,7 @@ function onRoomReady(users, dest) {
     users.forEach(user => {
         addOrUpdateUserInList(user);
         if (user.location) {
-            updateUserOnMap(user.socketId, user);
+            updateUserOnMap(user.userId, user);
         }
     });
 
@@ -603,9 +601,11 @@ if (!('ondeviceorientationabsolute' in window)) {
 }
 
 function updateMyMarkerHeading(heading) {
-    if (!mySocketId || !markers[mySocketId]) return;
+    const saved = JSON.parse(localStorage.getItem('realtrack_user') || '{}');
+    const userId = saved.userId;
+    if (!userId || !markers[userId]) return;
 
-    const marker = markers[mySocketId];
+    const marker = markers[userId];
     const el = marker.getElement();
     if (el) {
         const markerDiv = el.querySelector('.user-marker');
@@ -878,16 +878,17 @@ function clearDestination() {
 }
 
 // ── Marcadores no Mapa ───────────────────────────────────────
-function updateUserOnMap(socketId, user) {
+function updateUserOnMap(userId, user) {
     if (!user.location) return;
     const { lat, lng } = user.location;
-    const isMe = socketId === mySocketId;
+    const saved = JSON.parse(localStorage.getItem('realtrack_user') || '{}');
+    const isMe = userId === saved.userId;
 
-    if (markers[socketId]) {
-        const marker = markers[socketId];
+    if (markers[userId]) {
+        const marker = markers[userId];
         const newLatLng = [lat, lng];
 
-        // Atualizar posição (apenas uma vez)
+        // Atualizar posição
         marker.setLatLng(newLatLng);
 
         // Atualizar rotação (Bússola) se disponível
@@ -897,59 +898,44 @@ function updateUserOnMap(socketId, user) {
                 const markerDiv = el.querySelector('.user-marker');
                 const emojiDiv = el.querySelector('.user-emoji');
                 if (markerDiv) markerDiv.style.transform = `rotate(${user.location.heading}deg)`;
-                // Manter emoji em pé se desejar, ou girar junto
                 if (emojiDiv) emojiDiv.style.transform = `rotate(${-user.location.heading}deg)`;
             }
         }
 
-        // Adicionar ponto na trilha
-        if (!routes[socketId]) {
-            routes[socketId] = L.polyline([], { color: user.color, weight: 4 }).addTo(map);
-            routePoints[socketId] = [];
-        }
-        routePoints[socketId].push(newLatLng);
-        routes[socketId].setLatLngs(routePoints[socketId]);
-
         // ── SmartCamera Pro: follow inteligente ─────────────────
-        if (socketId === mySocketId && SmartCamera.shouldFollow()) {
+        if (isMe && SmartCamera.shouldFollow()) {
             const now = Date.now();
             const dt = (now - SmartCamera.lastPositionTime) / 1000; // segundos
 
-            // Converter para L.latLng para ter acesso a .lat/.lng
             const currentLatLng = L.latLng(lat, lng);
 
             const speed = calculateSpeed(currentLatLng, SmartCamera.lastPosition, dt);
             SmartCamera.lastSpeed = speed;
 
-            // Heading: preferir dado do GPS/Mapa (movimento), fallback para bússola
             const gpsHeading = user.location?.heading;
             if (gpsHeading !== null && gpsHeading !== undefined && speed > 2) {
                 SmartCamera.lastHeading = gpsHeading;
             }
 
-            // Throttle adaptativo: + rápido = + frequente (não interrompe o follow, só limita a taxa)
             const throttleMs = speed > 60 ? 300 : speed > 20 ? 500 : 800;
             const shouldUpdateCamera = (now - SmartCamera.throttle) >= throttleMs;
 
-            // Sempre atualiza a posição de referência
             SmartCamera.lastPosition = currentLatLng;
             SmartCamera.lastPositionTime = now;
 
             if (shouldUpdateCamera) {
                 SmartCamera.throttle = now;
 
-                // Look-ahead: adiantar o ponto-alvo na direção do movimento
                 let target = currentLatLng;
                 if (SmartCamera.lastHeading != null && speed > 2) {
                     const headingRad = (SmartCamera.lastHeading * Math.PI) / 180;
-                    const lookAhead = speed * 0.000008; // escala proporcional à velocidade
+                    const lookAhead = speed * 0.000008;
                     target = L.latLng(
                         lat + Math.cos(headingRad) * lookAhead,
                         lng + Math.sin(headingRad) * lookAhead
                     );
                 }
 
-                // Sempre seguir o usuário (sem condição de getBounds)
                 const targetZoom = getDynamicZoom(speed);
                 const currentZoom = map.getZoom();
 
@@ -959,16 +945,12 @@ function updateUserOnMap(socketId, user) {
                     map.panTo(target, { animate: true, duration: 0.5, easeLinearity: 0.25 });
                 }
 
-                // Rotação suave do mapa baseada em heading
-                // Só rotaciona se estiver em movimento (> 3 km/h) e heading válido
                 if (map.setBearing && speed > 3 && SmartCamera.lastHeading != null) {
                     SmartCamera.smoothedBearing = interpolateBearing(
                         SmartCamera.smoothedBearing,
                         SmartCamera.lastHeading,
                         0.15
                     );
-                    // NEGATIVO: leaflet-rotate setBearing(X) gira o mapa X° horário
-                    // Para o heading ficar no TOPO, precisamos girar o mapa no sentido CONTRÁRIO
                     map.setBearing(-SmartCamera.smoothedBearing);
                 }
             }
@@ -981,47 +963,44 @@ function updateUserOnMap(socketId, user) {
             .bindPopup(`<b>${user.username}</b>`)
             .addTo(map);
 
-        markers[socketId] = marker;
-
-        // Inicializar trilha
-        routePoints[socketId] = [[lat, lng]];
-        routes[socketId] = L.polyline(routePoints[socketId], {
-            color: user.color,
-            weight: 4
-        }).addTo(map);
+        markers[userId] = marker;
     }
 }
 
-function removeUserFromMap(socketId) {
-    if (markers[socketId]) {
-        map.removeLayer(markers[socketId]);
-        delete markers[socketId];
-    }
-    if (routes[socketId]) {
-        map.removeLayer(routes[socketId]);
-        delete routes[socketId];
-        delete routePoints[socketId];
+function removeUserFromMap(userId, socketId) {
+    // Se o usuário saiu, mas temos um marcador com o mesmo userId,
+    // precisamos verificar se o socketId que saiu é o que está no marcador.
+    // Como agora usamos userId como chave, se o usuário reconectou, ele terá
+    // um NOVO socketId associado ao mesmo userId.
+
+    // Para simplificar: o servidor só envia user_left se a sessão realmente acabou
+    // ou se o socket foi substituído. Se foi substituído, o novo socket já enviou location_update.
+
+    if (markers[userId]) {
+        map.removeLayer(markers[userId]);
+        delete markers[userId];
     }
 }
 
 // ── Lista de Usuários ────────────────────────────────────────
 function addOrUpdateUserInList(user) {
-    const existing = document.getElementById(`user-${user.socketId}`);
+    const userId = user.userId;
+    const existing = document.getElementById(`user-${userId}`);
     if (existing) {
-        updateUserInList(user.socketId, user);
+        updateUserInList(userId, user);
         return;
     }
 
     const el = document.createElement('div');
     el.className = 'user-item';
-    el.id = `user-${user.socketId}`;
+    el.id = `user-${userId}`;
     el.innerHTML = buildUserItemHTML(user);
     document.getElementById('usersList').appendChild(el);
     updateUserCount();
 }
 
-function updateUserInList(socketId, user) {
-    const el = document.getElementById(`user-${socketId}`);
+function updateUserInList(userId, user) {
+    const el = document.getElementById(`user-${userId}`);
     if (el) el.innerHTML = buildUserItemHTML(user);
 }
 
@@ -1041,8 +1020,8 @@ function buildUserItemHTML(user) {
   `;
 }
 
-function removeUserFromList(socketId) {
-    const el = document.getElementById(`user-${socketId}`);
+function removeUserFromList(userId) {
+    const el = document.getElementById(`user-${userId}`);
     if (el) el.remove();
     updateUserCount();
 }

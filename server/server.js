@@ -261,7 +261,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const user = roomManager.addUser(upperCode, socket.id, cleanName, avatar);
+        const user = roomManager.addUser(upperCode, socketId, cleanName, avatar, userId);
         if (!user) {
             socket.emit('error', { message: 'Sala cheia (máximo 15 usuários).' });
             return;
@@ -269,6 +269,7 @@ io.on('connection', (socket) => {
 
         socket.join(upperCode);
         socket.data.roomCode = upperCode;
+        socket.data.userId = userId; // Armazenar userId no socket também
 
         const currentUsers = roomManager.getUsers(upperCode).map(serializeUser);
         const destination = roomManager.getDestination(upperCode);
@@ -309,6 +310,7 @@ io.on('connection', (socket) => {
 
         io.to(code).emit('location_update', {
             socketId: socket.id,
+            userId: user.userId, // Identificador persistente
             user: serializeUser(user),
         });
     });
@@ -333,6 +335,7 @@ io.on('connection', (socket) => {
 
             io.to(code).emit('user_left', {
                 socketId: socket.id,
+                userId: user.userId, // IMPORTANTE: Enviar userId para evitar remover o ícone se o usuário já reconectou com novo socket
                 username: user.username,
             });
             console.log(`[-] ${user.username} saiu da sala ${code}`);
@@ -358,6 +361,7 @@ io.on('connection', (socket) => {
 
         io.to(code).emit('new_message', {
             socketId: socket.id,
+            userId: result.user.userId,
             username: result.user.username,
             color: result.user.color,
             avatar: result.user.avatar,
@@ -410,11 +414,11 @@ io.on('connection', (socket) => {
 function serializeUser(user) {
     return {
         socketId: user.socketId,
+        userId: user.userId, // Identificador persistente para o frontend
         username: user.username,
         avatar: user.avatar,
         color: user.color,
         location: user.location,
-        route: user.route,
         online: user.online,
     };
 }
