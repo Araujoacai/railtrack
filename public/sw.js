@@ -1,6 +1,5 @@
-// SW v7: Background GPS + Notificação Persistente
-// Mantém o processo vivo no Android mesmo com o app minimizado
-const CACHE_NAME = 'realtrack-v7';
+// SW v8: Bump de cache para forçar atualização do style.css (tema claro)
+const CACHE_NAME = 'realtrack-v8';
 const CACHEABLE_ASSETS = [
     '/css/style.css',
     '/manifest.json',
