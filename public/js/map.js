@@ -96,12 +96,39 @@ function calculateSpeed(newPos, oldPos, dt) {
 }
 
 
+// ── Service Worker ───────────────────────────────────────────
+let swRegistration = null;
+
+async function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+        swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        console.log('[SW] Registrado:', swRegistration.scope);
+
+        // Ouvir mensagens vindas do SW
+        navigator.serviceWorker.addEventListener('message', (e) => {
+            if (e.data?.type === 'STOP_GPS') {
+                stopGPSTracking();
+                showToast('⏹ GPS parado pelo usuário', 'info');
+            }
+        });
+    } catch (err) {
+        console.warn('[SW] Falha no registro:', err);
+    }
+}
+
+function sendToSW(message) {
+    if (swRegistration?.active) {
+        swRegistration.active.postMessage(message);
+    }
+}
+
+// ── Wake Lock + Background ────────────────────────────────────
 async function requestWakeLock() {
     try {
         if ('wakeLock' in navigator) {
             wakeLock = await navigator.wakeLock.request('screen');
             console.log('Wake Lock ativo');
-
             wakeLock.addEventListener('release', () => {
                 console.log('Wake Lock solto');
             });
@@ -111,12 +138,64 @@ async function requestWakeLock() {
     }
 }
 
-// Re-solicitar Wake Lock se a aba voltar a ficar visível
+// ── Gerenciar Background / Foreground ────────────────────────
+let backgroundKeepAlive = null;
+
 document.addEventListener('visibilitychange', async () => {
-    if (wakeLock !== null && document.visibilityState === 'visible') {
-        await requestWakeLock();
+    if (document.visibilityState === 'hidden') {
+        // App foi minimizado — iniciar background tracking
+        if (gpsGranted) {
+            // Pedir permissão de notificação se ainda não tiver
+            if ('Notification' in window && Notification.permission === 'default') {
+                await Notification.requestPermission();
+            }
+            // Avisar SW para mostrar notificação persistente
+            sendToSW({ type: 'START_BACKGROUND', roomCode });
+
+            // Keep-alive local: pinga o servidor a cada 10s em background
+            backgroundKeepAlive = setInterval(() => {
+                fetch('/api/keep-alive').catch(() => { });
+            }, 10000);
+        }
+    } else {
+        // App voltou ao foco — parar background tracking
+        sendToSW({ type: 'STOP_BACKGROUND' });
+
+        if (backgroundKeepAlive) {
+            clearInterval(backgroundKeepAlive);
+            backgroundKeepAlive = null;
+        }
+
+        // Renovar Wake Lock
+        if (wakeLock !== null) {
+            await requestWakeLock();
+        }
+
+        // Reconectar GPS se o watchPosition foi perdido em background
+        if (gpsGranted && watchId === null) {
+            console.log('[GPS] Reconectando watchPosition após background...');
+            restartGPSWatch();
+        }
     }
 });
+
+function stopGPSTracking() {
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+    gpsGranted = false;
+    setGPSStatus('error', '📍 GPS parado');
+}
+
+function restartGPSWatch() {
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    watchId = navigator.geolocation.watchPosition(
+        onLocationSuccess,
+        onLocationError,
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 }
+    );
+}
 
 // ── Mapa Leaflet ─────────────────────────────────────────────
 function initMap() {
@@ -253,20 +332,10 @@ function initSocket() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, lastRoom: code, lastRoomTime: Date.now() }));
     }
 
-    // Aviso de GPS em Background
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden && gpsGranted) {
-            // Alguns navegadores limitam GPS em background
-            document.title = `📍 Rodando em background...`;
-        } else {
-            document.title = `RealTrack – Sala ${roomCode || 'Mapa'}`;
-        }
-    });
-
-    // ── Keep-Alive (Ping periódico a cada 10 min) ────────────────
+    // ── Keep-Alive (Ping periódico a cada 25s – mesmo intervalo do pingInterval do Socket.IO)
     setInterval(() => {
         fetch('/api/keep-alive').catch(() => { });
-    }, 10 * 60 * 1000);
+    }, 25000);
 
     // Novo usuário entrou
     socket.on('user_joined', ({ user }) => {
@@ -1166,6 +1235,7 @@ function toggleOverpass() {
 
 // ── Inicialização ─────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+    registerServiceWorker();
     initMap();
     initSocket();
     requestWakeLock();
