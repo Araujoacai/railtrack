@@ -102,18 +102,32 @@ function initSocket() {
         mySocketId = socket.id;
         console.log('Conectado, ID:', mySocketId);
 
-        // Ler dados da sessão atual (vindo do login.js)
-        const username = sessionStorage.getItem('username');
-        const avatar = sessionStorage.getItem('avatar');
-        const action = sessionStorage.getItem('action');
-        const code = sessionStorage.getItem('roomCode');
-
         // Ler (ou gerar) userId persistente
         const saved = JSON.parse(localStorage.getItem('realtrack_user') || '{}');
         const userId = saved.userId || crypto.randomUUID();
         if (!saved.userId) {
             localStorage.setItem('realtrack_user', JSON.stringify({ ...saved, userId }));
         }
+
+        // ── PRIORIDADE 1: Reconexão dentro da mesma sessão de página ──
+        // Se roomCode já está definido em memória, é uma reconexão (queda de WiFi, etc.)
+        // → Rejoin na mesma sala sem criar uma nova!
+        if (roomCode) {
+            console.log('Reconexão: voltando para sala', roomCode);
+            socket.emit('join_room', {
+                code: roomCode,
+                username: myUser?.username || saved.username || 'Usuário',
+                avatar: myUser?.avatar || saved.avatar || '😊',
+                userId,
+            });
+            return;
+        }
+
+        // ── PRIORIDADE 2: Auto-reconnect via localStorage (volta ao app/reload) ──
+        const username = sessionStorage.getItem('username');
+        const avatar = sessionStorage.getItem('avatar');
+        const action = sessionStorage.getItem('action');
+        const code = sessionStorage.getItem('roomCode');
 
         if (!username || !avatar) {
             // Sem sessão de login – tentar auto-reconnect via localStorage
@@ -125,13 +139,12 @@ function initSocket() {
                     userId,
                 });
             } else {
-                // Sem dados → redirecionar para login
                 window.location.href = '/';
             }
             return;
         }
 
-        // Sessão válida: criar ou entrar em sala
+        // ── PRIORIDADE 3: Nova sessão vinda do login.js ──
         if (action === 'create') {
             socket.emit('create_room', { username, avatar, userId });
         } else if (action === 'join' && code) {

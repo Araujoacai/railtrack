@@ -69,25 +69,6 @@ class RoomManager {
 
     // ... methods ...
 
-    removeUser(code, socketId) {
-        const room = this.rooms.get(code);
-        if (!room) return null;
-
-        const user = room.users.get(socketId);
-        room.users.delete(socketId);
-        room.lastActivity = Date.now(); // Atualizar atividade
-
-        // Se o host saiu, transferir para o próximo (se houver)
-        if (room.host === socketId && room.users.size > 0) {
-            room.host = room.users.keys().next().value;
-        }
-
-        // NÃO deletar a sala imediatamente se estiver vazia. 
-        // Ela será limpa pelo cleanupRooms se ficar vazia por 5h.
-
-        return user;
-    }
-
     roomExists(code) {
         return this.rooms.has(code);
     }
@@ -198,16 +179,16 @@ class RoomManager {
 
         const user = room.users.get(socketId);
         room.users.delete(socketId);
+        room.lastActivity = Date.now();
 
         // Se o host saiu, transferir para o próximo
         if (room.host === socketId && room.users.size > 0) {
             room.host = room.users.keys().next().value;
         }
 
-        // Remover sala se vazia
-        if (room.users.size === 0) {
-            this.rooms.delete(code);
-        }
+        // NÃO remover sala vazia imediatamente!
+        // O cleanupRooms() remove após 5h de inatividade.
+        // Isso permite que usuários reconectem após queda de WiFi.
 
         return user;
     }
