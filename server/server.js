@@ -261,7 +261,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const user = roomManager.addUser(upperCode, socketId, cleanName, avatar, userId);
+        const user = roomManager.addUser(upperCode, socket.id, cleanName, avatar, userId);
         if (!user) {
             socket.emit('error', { message: 'Sala cheia (máximo 15 usuários).' });
             return;
