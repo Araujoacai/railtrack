@@ -64,15 +64,13 @@ function interpolateBearing(current, target, alpha) {
 // Reseta o mapa para Norte suavemente
 function resetMapBearing() {
     if (map && map.setBearing) {
-        // Animação de retorno ao norte em 300ms
         const steps = 10;
-        const start = SmartCamera.smoothedBearing;
         let i = 0;
         const interval = setInterval(() => {
             i++;
-            const t = i / steps;
             SmartCamera.smoothedBearing = interpolateBearing(SmartCamera.smoothedBearing, 0, 0.3);
-            map.setBearing(SmartCamera.smoothedBearing);
+            // Negativo: bearing do mapa é o inverso do heading
+            map.setBearing(-SmartCamera.smoothedBearing);
             if (i >= steps || Math.abs(SmartCamera.smoothedBearing) < 0.5) {
                 SmartCamera.smoothedBearing = 0;
                 map.setBearing(0);
@@ -557,8 +555,6 @@ window.addEventListener('deviceorientation', (event) => {
 });
 
 function updateMyMarkerHeading(heading) {
-    // Atualiza visualmente e também pode enviar para o servidor se quisermos que outros vejam
-    // Por enquanto, apenas visual local
     if (!mySocketId || !markers[mySocketId]) return;
 
     const marker = markers[mySocketId];
@@ -566,8 +562,13 @@ function updateMyMarkerHeading(heading) {
     if (el) {
         const markerDiv = el.querySelector('.user-marker');
         const emojiDiv = el.querySelector('.user-emoji');
-        if (markerDiv) markerDiv.style.transform = `rotate(${heading}deg)`;
-        if (emojiDiv) emojiDiv.style.transform = `rotate(${-heading}deg)`;
+
+        // Com o mapa já rotacionado para a direção do usuário (setBearing = -heading),
+        // a seta deve sempre apontar para CIMA (0°) — o mapa cuida da direção.
+        // O emoji contra-rotaciona pelo bearing atual do mapa para ficar ereto.
+        const mapBearing = -SmartCamera.smoothedBearing; // o que foi passado para o setBearing
+        if (markerDiv) markerDiv.style.transform = `rotate(0deg)`;
+        if (emojiDiv) emojiDiv.style.transform = `rotate(${-mapBearing}deg)`;
     }
 }
 
@@ -917,9 +918,11 @@ function updateUserOnMap(socketId, user) {
                     SmartCamera.smoothedBearing = interpolateBearing(
                         SmartCamera.smoothedBearing,
                         SmartCamera.lastHeading,
-                        0.15  // alpha: 0.1 = mais suave, 0.3 = mais rápido
+                        0.15
                     );
-                    map.setBearing(SmartCamera.smoothedBearing);
+                    // NEGATIVO: leaflet-rotate setBearing(X) gira o mapa X° horário
+                    // Para o heading ficar no TOPO, precisamos girar o mapa no sentido CONTRÁRIO
+                    map.setBearing(-SmartCamera.smoothedBearing);
                 }
             }
         }
