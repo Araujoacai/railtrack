@@ -28,6 +28,10 @@ let settingDestByClick = false;
 // Controle de Navegação
 let isNavigating = false;
 
+// Follow estilo Google Maps
+let isFollowingUser = false;
+let followThrottle = 0;
+
 
 async function requestWakeLock() {
     try {
@@ -67,6 +71,14 @@ function initMap() {
 
     // Clique no mapa para definir destino (apenas host)
     map.on('click', onMapClick);
+
+    // Parar follow ao interagir manualmente (estilo Google Maps)
+    map.on('dragstart zoomstart', () => {
+        if (isFollowingUser) {
+            isFollowingUser = false;
+            updateFollowButtonUI();
+        }
+    });
 
     // Ajustar mapa quando redimensionar
     setTimeout(() => map.invalidateSize(), 500);
@@ -334,10 +346,12 @@ function onLocationSuccess(pos) {
 
     socket.emit('update_location', { lat, lng, accuracy, heading, speed });
 
-    // Centralizar apenas no primeiro fix de GPS
+    // Centralizar apenas no primeiro fix de GPS e ativar follow automaticamente
     if (!initialCenterDone) {
         map.setView([lat, lng], 18);
         initialCenterDone = true;
+        isFollowingUser = true;
+        updateFollowButtonUI();
     }
 
     // Recalcular rota se há destino (a cada 10 segundos)
@@ -373,31 +387,42 @@ function setGPSStatus(state, text) {
 // ── Controle de Navegação ────────────────────────────────────
 function startNavigation() {
     isNavigating = true;
-    const btn = document.querySelector('.fab-center');
-    if (btn) btn.classList.add('active'); // Estilo visual para indicar "seguindo"
+    // Ativa follow ao iniciar rota
+    isFollowingUser = true;
+    updateFollowButtonUI();
 
     if (myLastLat && myLastLng) {
         map.flyTo([myLastLat, myLastLng], 18, {
             animate: true,
-            duration: 2.0 // Animação de entrada lenta (2s)
+            duration: 1.5
         });
     }
 }
 
 function stopNavigation() {
     isNavigating = false;
-    const btn = document.querySelector('.fab-center');
-    if (btn) btn.classList.remove('active');
 }
 
-// Detectar interação do usuário para pausar "Follow Me"
-// Note: map is initialized in initMap, so we need to add listener there or wait
-// We can add it in initMap actually, or check map existence here
-// Moving listener to initMap or ensuring map exists
+// Atualiza visual do botão de centralizar (estilo Google Maps)
+function updateFollowButtonUI() {
+    const btn = document.querySelector('.fab-center');
+    if (!btn) return;
+    if (isFollowingUser) {
+        btn.classList.add('active');
+    } else {
+        btn.classList.remove('active');
+    }
+}
 
+// Acionado pelo botão 🎯: recentra e reativa follow (igual Google Maps)
 function centerMap() {
     if (myLastLat && myLastLng) {
-        startNavigation(); // Retoma o "Follow Me" com zoom alto
+        isFollowingUser = true;
+        updateFollowButtonUI();
+        map.flyTo([myLastLat, myLastLng], 18, {
+            animate: true,
+            duration: 1.2
+        });
     } else {
         requestGPS();
     }
@@ -719,10 +744,22 @@ function updateUserOnMap(socketId, user) {
         routePoints[socketId].push(newLatLng);
         routes[socketId].setLatLngs(routePoints[socketId]);
 
-        // Follow Me (Suave) - Apenas se for eu e estiver navegando
-        if (socketId === mySocketId && isNavigating) {
-            // Sempre panTo (sem recarregar tiles) para evitar flash no mobile
-            map.panTo(newLatLng, { animate: true, duration: 0.8, easeLinearity: 0.25 });
+        // Follow Me estilo Google Maps
+        if (socketId === mySocketId && isFollowingUser) {
+            const now = Date.now();
+            // Throttle: no máximo 1 atualização a cada 800ms
+            if (now - followThrottle < 800) return;
+            followThrottle = now;
+
+            // Só move o mapa se o marcador saiu da viewport
+            const bounds = map.getBounds();
+            if (!bounds.contains(newLatLng)) {
+                map.panTo(newLatLng, {
+                    animate: true,
+                    duration: 0.8,
+                    easeLinearity: 0.25
+                });
+            }
         }
 
     } else {
