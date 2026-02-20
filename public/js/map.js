@@ -7,12 +7,12 @@ let routes = {}; // socketId -> Polyline
 let routePoints = {}; // socketId -> [[lat,lng], ...]
 let destination = null; // {lat, lng, name}
 let navRouteLine = null; // Linha da rota OSRM
+let destMarker = null;   // Marcador 🏁 do destino no mapa
 let watchId = null;
 let myLastLat = null, myLastLng = null;
 let lastRouteCalc = 0;
 let gpsGranted = false;
 let wakeLock = null;
-let initialCenterDone = false; // Add this line
 const socket = io();
 
 // Overpass API (Radares e Pedágios)
@@ -696,7 +696,6 @@ function translateInstruction(step) {
 }
 
 function showDestinationOnMap(dest) {
-    // Marcador de destino
     const icon = L.divIcon({
         html: '<div style="font-size:32px">🏁</div>',
         className: '',
@@ -704,10 +703,10 @@ function showDestinationOnMap(dest) {
         iconAnchor: [20, 20]
     });
 
-    // Se já existe, remove
-    // (Poderíamos guardar ref em variavel global se quiser limpar melhor)
+    // Remove marcador anterior se existir
+    if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
 
-    L.marker([dest.lat, dest.lng], { icon })
+    destMarker = L.marker([dest.lat, dest.lng], { icon })
         .bindPopup(`<b>Chegada:</b> ${dest.name}`)
         .addTo(map);
 
@@ -723,6 +722,7 @@ function showDestinationOnMap(dest) {
 function clearDestinationUI() {
     destination = null;
     if (navRouteLine) { map.removeLayer(navRouteLine); navRouteLine = null; }
+    if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
 
     const dirSection = document.getElementById('directionsSection');
     if (dirSection) dirSection.style.display = 'none';
@@ -734,7 +734,6 @@ function clearDestinationUI() {
     if (destInfoEl) destInfoEl.textContent = '';
 
     updateNavUI();
-    // Limpar marcadores de destino do mapa seria ideal aqui
 }
 
 // ── Busca de Local (Nominatim) ───────────────────────────────
