@@ -30,13 +30,14 @@ let isNavigating = false;
 
 // ── SmartCamera Pro ────────────────────────────────
 const SmartCamera = {
-    mode: 'FREE',        // 'FOLLOW' | 'FREE'
+    mode: 'FREE',
     initialized: false,
     throttle: 0,
     lastPosition: null,
-    lastPositionTime: 0, // timestamp do último fix (para speed correta)
+    lastPositionTime: 0,
     lastSpeed: 0,
     lastHeading: 0,
+    smoothedBearing: 0,  // bearing interpolado (evita saltos)
 
     enable() {
         this.mode = 'FOLLOW';
@@ -45,11 +46,40 @@ const SmartCamera = {
     disable() {
         this.mode = 'FREE';
         updateFollowButtonUI();
+        // Resetar rotação suavemente ao sair do follow
+        resetMapBearing();
     },
     shouldFollow() {
         return this.mode === 'FOLLOW';
     }
 };
+
+// Interpola bearing pelo caminho mais curto (resolve wrap 0°/360°)
+function interpolateBearing(current, target, alpha) {
+    let delta = ((target - current + 540) % 360) - 180;
+    return (current + delta * alpha + 360) % 360;
+}
+
+// Reseta o mapa para Norte suavemente
+function resetMapBearing() {
+    if (map && map.setBearing) {
+        // Animação de retorno ao norte em 300ms
+        const steps = 10;
+        const start = SmartCamera.smoothedBearing;
+        let i = 0;
+        const interval = setInterval(() => {
+            i++;
+            const t = i / steps;
+            SmartCamera.smoothedBearing = interpolateBearing(SmartCamera.smoothedBearing, 0, 0.3);
+            map.setBearing(SmartCamera.smoothedBearing);
+            if (i >= steps || Math.abs(SmartCamera.smoothedBearing) < 0.5) {
+                SmartCamera.smoothedBearing = 0;
+                map.setBearing(0);
+                clearInterval(interval);
+            }
+        }, 30);
+    }
+}
 
 function getDynamicZoom(speed) {
     if (speed > 80) return 15;
@@ -92,6 +122,8 @@ function initMap() {
     map = L.map('map', {
         zoomControl: true,
         attributionControl: false,
+        rotate: true,        // habilita suporte a bearing (leaflet-rotate)
+        rotateControl: false,// sem botão de bússola padrão
     }).setView([-15.7801, -47.9292], 13);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -792,12 +824,21 @@ function updateUserOnMap(socketId, user) {
                 const currentZoom = map.getZoom();
 
                 if (Math.abs(targetZoom - currentZoom) >= 1) {
-                    // Zoom muda: flyTo (anima zoom + pan)
                     map.flyTo(target, targetZoom, { animate: true, duration: 0.8, easeLinearity: 0.25 });
                 } else {
-                    // Zoom igual: panTo (sem recarregar tiles = sem flash)
                     map.panTo(target, { animate: true, duration: 0.8, easeLinearity: 0.25 });
                 }
+            }
+
+            // Rotação suave do mapa baseada em heading
+            // Só rotaciona se estiver em movimento (> 5 km/h) e heading válido
+            if (map.setBearing && speed > 5 && SmartCamera.lastHeading != null) {
+                SmartCamera.smoothedBearing = interpolateBearing(
+                    SmartCamera.smoothedBearing,
+                    SmartCamera.lastHeading,
+                    0.15  // alpha: 0.1 = mais suave, 0.3 = mais rápido
+                );
+                map.setBearing(SmartCamera.smoothedBearing);
             }
         }
 
