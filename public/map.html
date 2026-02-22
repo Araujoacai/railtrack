@@ -20,6 +20,15 @@
     <!-- ── Mapa ── -->
     <div id="map"></div>
 
+    <!-- ── Banner de Modo Direção ── -->
+    <div class="drive-banner" id="driveBanner">
+        <div class="drive-banner-icon" id="driveNavIcon">⬆️</div>
+        <div class="drive-banner-info">
+            <div class="drive-banner-dist" id="driveNavDist">--- m</div>
+            <div class="drive-banner-text" id="driveNavText">Siga em frente</div>
+        </div>
+    </div>
+
     <!-- ── Painel lateral ── -->
     <div class="side-panel" id="sidePanel">
         <div class="panel-header">
@@ -96,6 +105,17 @@
 
     <!-- ── Botão de tema claro/escuro ── -->
     <button class="fab-theme" id="btnTheme" onclick="toggleMapTheme()" title="Alternar tema">🌙</button>
+
+    <!-- ── Controles de Modo Direção ── -->
+    <div class="drive-controls">
+        <button class="btn-drive-fab" onclick="map.zoomIn()" title="Aumentar Zoom">+</button>
+        <button class="btn-drive-fab" onclick="map.zoomOut()" title="Diminuir Zoom">−</button>
+    </div>
+
+    <!-- ── Alternar Modo Direção ── -->
+    <button class="fab-drive-toggle" id="btnDriveToggle" onclick="toggleDriveMode()" title="Modo Direção">
+        🚗
+    </button>
 
 
     <!-- ── Toast de notificações ── -->

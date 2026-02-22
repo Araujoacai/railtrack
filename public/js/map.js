@@ -11,6 +11,8 @@ let myLastLat = null, myLastLng = null;
 let lastRouteCalc = 0;
 let gpsGranted = false;
 let wakeLock = null;
+let driveMode = false;
+let lastInstructionSpoken = "";
 const socket = io();
 
 // Overpass API (Radares e Pedágios)
@@ -543,6 +545,12 @@ function onLocationSuccess(pos) {
             startNavigation();
         }
     }
+
+    // Auto-sugestão de Modo Direção (se > 10km/h e não estiver em driveMode)
+    if (speed > 10 && !driveMode && !sessionStorage.getItem('driveModeDismissed')) {
+        showToast('🚗 Detectado movimento. Ativar Modo Direção?', 'info');
+        // Poderíamos colocar um botão no toast, mas por agora apenas sugerimos
+    }
 }
 
 function onLocationError(err) {
@@ -720,6 +728,14 @@ function renderDirections(steps) {
             <span class="step-dist">${dist}</span>
         `;
         list.appendChild(div);
+
+        // Se for o primeiro passo e estivermos em modo navegação, atualiza banner e fala
+        if (i === 0 && isNavigating) {
+            updateDriveBanner(step);
+            if (driveMode) {
+                speakInstruction(text, dist);
+            }
+        }
     });
 }
 
@@ -798,6 +814,10 @@ function clearDestinationUI() {
 
     const dirSection = document.getElementById('directionsSection');
     if (dirSection) dirSection.style.display = 'none';
+
+    // Esconde o banner de direção se estiver visível
+    const banner = document.getElementById('driveBanner');
+    if (banner) banner.style.display = 'none';
 
     const dirList = document.getElementById('directionsList');
     if (dirList) dirList.innerHTML = '';
@@ -1284,6 +1304,76 @@ function toggleOverpass() {
     } else {
         clearOverpassMarkers();
     }
+}
+
+// ── Modo Direção (Car Mode) ───────────────────────────────────
+
+function toggleDriveMode() {
+    driveMode = !driveMode;
+    document.body.classList.toggle('drive-mode', driveMode);
+
+    // Atualiza ícone do botão
+    const btn = document.getElementById('btnDriveToggle');
+    if (btn) btn.textContent = driveMode ? '📱' : '🚗';
+
+    if (driveMode) {
+        // Esconde painel lateral
+        panelOpen = false;
+        document.getElementById('sidePanel').classList.add('collapsed');
+        document.getElementById('fabPanel').style.display = 'flex';
+        showToast('🚀 Modo Direção Ativado', 'success');
+
+        // Se já temos rota, ler a primeira instrução
+        const activeStep = document.querySelector('.direction-step.active');
+        if (activeStep) {
+            const text = activeStep.querySelector('.step-text').textContent;
+            const dist = activeStep.querySelector('.step-dist').textContent;
+            speakInstruction(text, dist);
+        }
+
+        // No modo direção, o zoom deve ser um pouco mais próximo para ver as ruas
+        if (myLastLat && myLastLng) {
+            map.flyTo([myLastLat, myLastLng], 18);
+        }
+    } else {
+        showToast('📱 Modo Padrão Ativado', 'info');
+    }
+}
+
+function updateDriveBanner(step) {
+    const icon = getManeuverIcon(step.maneuver.type, step.maneuver.modifier);
+    const text = translateInstruction(step);
+    const dist = step.distance >= 1000
+        ? `${(step.distance / 1000).toFixed(1)} km`
+        : `${Math.round(step.distance)} m`;
+
+    const bannerIcon = document.getElementById('driveNavIcon');
+    const bannerDist = document.getElementById('driveNavDist');
+    const bannerText = document.getElementById('driveNavText');
+
+    if (bannerIcon) bannerIcon.textContent = icon;
+    if (bannerDist) bannerDist.textContent = dist;
+    if (bannerText) bannerText.textContent = text;
+}
+
+function speakInstruction(text, distance) {
+    if (!('speechSynthesis' in window)) return;
+
+    // Evita falar a mesma instrução repetidamente se não houve mudança significativa
+    const voiceText = `${text}, em ${distance}`;
+    if (voiceText === lastInstructionSpoken) return;
+
+    lastInstructionSpoken = voiceText;
+
+    // Cancela falas anteriores
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(voiceText);
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    window.speechSynthesis.speak(utterance);
 }
 
 // ── Inicialização ─────────────────────────────────────────────
