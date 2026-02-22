@@ -201,7 +201,7 @@ let tileLayer = null; // referência do tile para trocar no tema
 
 const TILES = {
     dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    light: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', // OSM Standard é mais atualizado que CartoDB Light
 };
 let currentTheme = localStorage.getItem('rt_theme') || 'dark';
 
@@ -267,11 +267,16 @@ function onMapClick(e) {
 
     const { lat, lng } = e.latlng;
 
-    // Reverse Geocoding (Nominatim) para pegar nome da rua
-    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+    // Reverse Geocoding (Nominatim) detalhado para pegar nome exato da rua
+    // Adicionado addressdetails=1 para obter componentes específicos do endereço
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
+        headers: { 'User-Agent': 'RealTrack-App/1.0' }
+    })
         .then(res => res.json())
         .then(data => {
-            const name = data.display_name ? data.display_name.split(',')[0] : 'Destino Selecionado';
+            const addr = data.address || {};
+            // Prioridade: rua (road) > estabelecimento > bairro > display_name genérico
+            const name = addr.road || addr.pedestrian || addr.suburb || (data.display_name ? data.display_name.split(',')[0] : 'Destino Selecionado');
             socket.emit('set_destination', { lat, lng, name });
         })
         .catch(() => {
@@ -881,8 +886,10 @@ async function searchDestination() {
     resultsEl.innerHTML = '<div class="nav-result-item">🔍 Buscando...</div>';
 
     try {
+        // addressdetails=1 ajuda a extrair a rua corretamente no clique
         const res = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=br`
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=br&addressdetails=1`,
+            { headers: { 'User-Agent': 'RealTrack-App/1.0' } }
         );
         const data = await res.json();
 
@@ -895,12 +902,25 @@ async function searchDestination() {
         data.forEach(item => {
             const div = document.createElement('div');
             div.className = 'nav-result-item';
-            div.textContent = item.display_name.split(',').slice(0, 4).join(', ');
+
+            // Formatando o nome do resultado: Rua, Bairro - Cidade
+            const addr = item.address || {};
+            const street = addr.road || addr.pedestrian || '';
+            const suburb = addr.suburb || addr.neighbourhood || '';
+            const city = addr.city || addr.town || '';
+
+            let displayName = street;
+            if (suburb) displayName += (displayName ? `, ${suburb}` : suburb);
+            if (city) displayName += (displayName ? ` - ${city}` : city);
+
+            // Fallback se a extração falhar
+            if (!displayName) displayName = item.display_name.split(',').slice(0, 3).join(', ');
+
+            div.textContent = displayName;
             div.onclick = () => {
                 const lat = parseFloat(item.lat);
                 const lng = parseFloat(item.lon);
-                const name = item.display_name.split(',').slice(0, 3).join(', ');
-                socket.emit('set_destination', { lat, lng, name });
+                socket.emit('set_destination', { lat, lng, name: displayName });
                 resultsEl.style.display = 'none';
                 if (input) input.value = '';
             };
