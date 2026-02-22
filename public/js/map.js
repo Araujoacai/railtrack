@@ -13,7 +13,36 @@ let gpsGranted = false;
 let wakeLock = null;
 let driveMode = false;
 let lastInstructionSpoken = "";
+const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjhmZTRlMzg4N2QzYzRhYWNhMmZjYzUyZGUxNTkwZTg1IiwiaCI6Im11cm11cjY0In0=';
 const socket = io();
+
+// Gerenciamento de Provedores (ORS vs Backup)
+const ProviderManager = {
+    orsEnabled: sessionStorage.getItem('ors_disabled_until_reset') !== 'true',
+    minQuotaDaily: 40, // Limite de segurança para fallback
+
+    checkQuota(headers) {
+        if (!headers) return;
+        const remaining = headers.get('x-ratelimit-remaining-daily');
+        if (remaining !== null) {
+            const remInt = parseInt(remaining);
+            if (remInt < this.minQuotaDaily) {
+                console.warn(`[ORS] Cota diária baixa (${remInt}). Ativando fallback para Nominatim/OSRM.`);
+                this.disableORS();
+            }
+        }
+    },
+
+    disableORS() {
+        this.orsEnabled = false;
+        sessionStorage.setItem('ors_disabled_until_reset', 'true');
+        showToast('🔄 Usando backup gratuito (limite ORS atingido)', 'info');
+    },
+
+    isORSAvaliable() {
+        return this.orsEnabled && ORS_API_KEY;
+    }
+};
 
 // Overpass API (Radares e Pedágios)
 let overpassEnabled = false;
@@ -269,15 +298,39 @@ function onMapClick(e) {
 
     const { lat, lng } = e.latlng;
 
-    // Reverse Geocoding (Nominatim) detalhado para pegar nome exato da rua
-    // Adicionado addressdetails=1 e zoom=18 para maior precisão na rua
+    if (ProviderManager.isORSAvaliable()) {
+        // Tenta OpenRouteService
+        fetch(`https://api.openrouteservice.org/geocode/reverse?api_key=${ORS_API_KEY}&point.lon=${lng}&point.lat=${lat}&size=1`)
+            .then(res => {
+                ProviderManager.checkQuota(res.headers);
+                return res.json();
+            })
+            .then(data => {
+                if (data.features && data.features.length > 0) {
+                    const feature = data.features[0].properties;
+                    const name = feature.name || feature.street || feature.label.split(',')[0];
+                    socket.emit('set_destination', { lat, lng, name });
+                } else {
+                    throw new Error('Nenhum resultado ORS');
+                }
+            })
+            .catch(err => {
+                console.warn('[ORS] Falha geocode reverse, usando fallback:', err);
+                fallbackGeocode(lat, lng);
+            });
+    } else {
+        fallbackGeocode(lat, lng);
+    }
+}
+
+function fallbackGeocode(lat, lng) {
+    // Nominatim (Otimizado anteriormente)
     fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&zoom=18`, {
         headers: { 'User-Agent': 'RealTrack-App/1.0' }
     })
         .then(res => res.json())
         .then(data => {
             const addr = data.address || {};
-            // Prioridade: rua (road) > pedestre > praça > bairro > vila > display_name genérico
             const name = addr.road || addr.pedestrian || addr.square || addr.hamlet || addr.village || addr.suburb || (data.display_name ? data.display_name.split(',')[0] : 'Destino Selecionado');
             socket.emit('set_destination', { lat, lng, name });
         })
@@ -675,57 +728,86 @@ function createUserIcon(avatar, color) {
 }
 
 // ── Roteamento (OSRM) ────────────────────────────────────────
+// ── Roteamento Híbrido (ORS / OSRM) ──────────────────────────
 async function calculateRoute(fromLat, fromLng, toLat, toLng) {
     lastRouteCalc = Date.now();
 
+    if (ProviderManager.isORSAvaliable()) {
+        try {
+            const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_API_KEY}&start=${fromLng},${fromLat}&end=${toLng},${toLat}`;
+            const res = await fetch(url);
+            ProviderManager.checkQuota(res.headers);
+            const data = await res.json();
+
+            if (data.features && data.features.length > 0) {
+                const route = data.features[0];
+                const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                const summary = route.properties.summary;
+                const steps = route.properties.segments[0].steps;
+
+                drawRouteOnMap(coords);
+                updateRouteInfo(summary.distance, summary.duration);
+                renderDirections(steps, 'ors');
+                return;
+            }
+        } catch (err) {
+            console.warn('[ORS] Erro cálculo rota, tentando fallback OSRM:', err);
+        }
+    }
+
+    // Fallback OSRM
     try {
         const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=true`;
         const res = await fetch(url);
         const data = await res.json();
 
-        if (data.code !== 'Ok' || !data.routes || !data.routes.length) {
-            console.warn('OSRM: nenhuma rota encontrada');
-            return;
+        if (data.code === 'Ok' && data.routes.length > 0) {
+            const route = data.routes[0];
+            const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+            drawRouteOnMap(coords);
+            updateRouteInfo(route.distance, route.duration);
+            renderDirections(route.legs[0].steps, 'osrm');
         }
-
-        const route = data.routes[0];
-        const coords = route.geometry.coordinates.map(c => [c[1], c[0]]); // [lng,lat] -> [lat,lng]
-
-        // Desenhar rota no mapa
-        if (navRouteLine) map.removeLayer(navRouteLine);
-        navRouteLine = L.polyline(coords, {
-            color: '#00D9FF',
-            weight: 5,
-            opacity: 0.8,
-            dashArray: '12, 8',
-            lineCap: 'round',
-        }).addTo(map);
-
-        // Distância e duração
-        const distKm = (route.distance / 1000).toFixed(1);
-        const durMin = Math.ceil(route.duration / 60);
-        const distEl = document.getElementById('destDistance');
-        if (distEl) distEl.textContent = `${distKm} km · ~${durMin} min`;
-
-        // Instruções turn-by-turn
-        const steps = route.legs[0].steps;
-        renderDirections(steps);
-
     } catch (err) {
-        console.error('Erro ao calcular rota:', err);
+        console.error('Erro crítica no roteamento:', err);
     }
 }
 
-function renderDirections(steps) {
+function drawRouteOnMap(coords) {
+    if (navRouteLine) map.removeLayer(navRouteLine);
+    navRouteLine = L.polyline(coords, {
+        color: '#00D9FF',
+        weight: 5,
+        opacity: 0.8,
+        dashArray: '12, 8',
+        lineCap: 'round',
+    }).addTo(map);
+}
+
+function updateRouteInfo(distanceMeters, durationSeconds) {
+    const distKm = (distanceMeters / 1000).toFixed(1);
+    const durMin = Math.ceil(durationSeconds / 60);
+    const distEl = document.getElementById('destDistance');
+    if (distEl) distEl.textContent = `${distKm} km · ~${durMin} min`;
+}
+
+function renderDirections(steps, provider = 'osrm') {
     const list = document.getElementById('directionsList');
+    if (!list) return;
     list.innerHTML = '';
 
     steps.forEach((step, i) => {
-        const icon = getManeuverIcon(step.maneuver.type, step.maneuver.modifier);
-        const text = translateInstruction(step);
-        const dist = step.distance >= 1000
-            ? `${(step.distance / 1000).toFixed(1)} km`
-            : `${Math.round(step.distance)} m`;
+        let text, dist, icon;
+
+        if (provider === 'ors') {
+            text = step.instruction;
+            dist = step.distance >= 1000 ? `${(step.distance / 1000).toFixed(1)} km` : `${Math.round(step.distance)} m`;
+            icon = getORSIcon(step.type);
+        } else {
+            text = translateInstruction(step);
+            dist = step.distance >= 1000 ? `${(step.distance / 1000).toFixed(1)} km` : `${Math.round(step.distance)} m`;
+            icon = getManeuverIcon(step.maneuver.type, step.maneuver.modifier);
+        }
 
         const div = document.createElement('div');
         div.className = `direction-step${i === 0 ? ' active' : ''}`;
@@ -736,14 +818,36 @@ function renderDirections(steps) {
         `;
         list.appendChild(div);
 
-        // Se for o primeiro passo e estivermos em modo navegação, atualiza banner e fala
         if (i === 0 && isNavigating) {
-            updateDriveBanner(step);
-            if (driveMode) {
-                speakInstruction(text, dist);
-            }
+            updateDriveBannerManual(icon, text, dist);
+            if (driveMode) speakInstruction(text, dist);
         }
     });
+}
+
+function updateDriveBannerManual(icon, text, dist) {
+    const bannerIcon = document.getElementById('driveNavIcon');
+    const bannerDist = document.getElementById('driveNavDist');
+    const bannerText = document.getElementById('driveNavText');
+    if (bannerIcon) bannerIcon.textContent = icon;
+    if (bannerDist) bannerDist.textContent = dist;
+    if (bannerText) bannerText.textContent = text;
+}
+
+function getORSIcon(type) {
+    const icons = {
+        0: '➡️', // Left
+        1: '⬅️', // Right
+        2: '↗️', // Sharp Left
+        3: '↘️', // Sharp Right
+        4: '↗️', // Slight Left
+        5: '↘️', // Slight Right
+        6: '⬆️', // Straight
+        7: '🔄', // Roundabout
+        10: '🚩', // Start
+        11: '🏁', // Destination
+    };
+    return icons[type] || '⬆️';
 }
 
 function getManeuverIcon(type, modifier) {
@@ -887,50 +991,67 @@ async function searchDestination() {
     resultsEl.style.display = '';
     resultsEl.innerHTML = '<div class="nav-result-item">🔍 Buscando...</div>';
 
-    try {
-        // addressdetails=1 ajuda a extrair a rua corretamente no clique
-        const res = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=br&addressdetails=1`,
-            { headers: { 'User-Agent': 'RealTrack-App/1.0' } }
-        );
-        const data = await res.json();
+    if (ProviderManager.isORSAvaliable()) {
+        try {
+            const res = await fetch(`https://api.openrouteservice.org/geocode/search?api_key=${ORS_API_KEY}&text=${encodeURIComponent(query)}&size=5&boundary.country=BR`);
+            ProviderManager.checkQuota(res.headers);
+            const data = await res.json();
 
-        if (!data.length) {
-            resultsEl.innerHTML = '<div class="nav-result-item">❌ Nenhum resultado encontrado</div>';
-            return;
+            if (data.features && data.features.length > 0) {
+                renderSearchResults(data.features, 'ors', resultsEl, input);
+                return;
+            }
+        } catch (err) {
+            console.warn('[ORS] Erro busca, tentando fallback Nominatim:', err);
         }
+    }
 
-        resultsEl.innerHTML = '';
-        data.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'nav-result-item';
-
-            // Formatando o nome do resultado: Rua, Bairro - Cidade
-            const addr = item.address || {};
-            const street = addr.road || addr.pedestrian || '';
-            const suburb = addr.suburb || addr.neighbourhood || '';
-            const city = addr.city || addr.town || '';
-
-            let displayName = street;
-            if (suburb) displayName += (displayName ? `, ${suburb}` : suburb);
-            if (city) displayName += (displayName ? ` - ${city}` : city);
-
-            // Fallback se a extração falhar
-            if (!displayName) displayName = item.display_name.split(',').slice(0, 3).join(', ');
-
-            div.textContent = displayName;
-            div.onclick = () => {
-                const lat = parseFloat(item.lat);
-                const lng = parseFloat(item.lon);
-                socket.emit('set_destination', { lat, lng, name: displayName });
-                resultsEl.style.display = 'none';
-                if (input) input.value = '';
-            };
-            resultsEl.appendChild(div);
+    // Fallback Nominatim
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=br&addressdetails=1`, {
+            headers: { 'User-Agent': 'RealTrack-App/1.0' }
         });
+        const data = await res.json();
+        renderSearchResults(data, 'nominatim', resultsEl, input);
     } catch (err) {
         resultsEl.innerHTML = '<div class="nav-result-item">❌ Erro na busca</div>';
     }
+}
+
+function renderSearchResults(data, provider, resultsEl, input) {
+    if (!data.length) {
+        resultsEl.innerHTML = '<div class="nav-result-item">❌ Nenhum resultado encontrado</div>';
+        return;
+    }
+
+    resultsEl.innerHTML = '';
+    data.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'nav-result-item';
+
+        let name, lat, lng;
+
+        if (provider === 'ors') {
+            name = item.properties.label;
+            lat = item.geometry.coordinates[1];
+            lng = item.geometry.coordinates[0];
+        } else {
+            const addr = item.address || {};
+            const street = addr.road || addr.pedestrian || '';
+            const suburb = addr.suburb || addr.neighbourhood || '';
+            name = street ? `${street}${suburb ? ', ' + suburb : ''}` : item.display_name.split(',').slice(0, 3).join(', ');
+            lat = parseFloat(item.lat);
+            lng = parseFloat(item.lon);
+        }
+
+        div.textContent = name;
+        div.onclick = () => {
+            socket.emit('set_destination', { lat, lng, name });
+            resultsEl.style.display = 'none';
+            if (input) input.value = '';
+        };
+        resultsEl.appendChild(div);
+    });
 }
 
 function enableMapClick() {
