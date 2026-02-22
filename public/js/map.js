@@ -201,7 +201,8 @@ let tileLayer = null; // referência do tile para trocar no tema
 
 const TILES = {
     dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    light: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', // OSM Standard é mais atualizado que CartoDB Light
+    // Usando CartoDB Voyager para o tema claro: mais limpo e informativo que o OSM puro
+    light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
 };
 let currentTheme = localStorage.getItem('rt_theme') || 'dark';
 
@@ -232,7 +233,8 @@ function initMap() {
 
     tileLayer = L.tileLayer(TILES[currentTheme], {
         maxZoom: 19,
-        subdomains: 'abcd',
+        subdomains: 'abcd', // CartoDB suporta abcd
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
     }).addTo(map);
 
     // Aplicar tema salvo na inicialização
@@ -268,15 +270,15 @@ function onMapClick(e) {
     const { lat, lng } = e.latlng;
 
     // Reverse Geocoding (Nominatim) detalhado para pegar nome exato da rua
-    // Adicionado addressdetails=1 para obter componentes específicos do endereço
-    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
+    // Adicionado addressdetails=1 e zoom=18 para maior precisão na rua
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&zoom=18`, {
         headers: { 'User-Agent': 'RealTrack-App/1.0' }
     })
         .then(res => res.json())
         .then(data => {
             const addr = data.address || {};
-            // Prioridade: rua (road) > estabelecimento > bairro > display_name genérico
-            const name = addr.road || addr.pedestrian || addr.suburb || (data.display_name ? data.display_name.split(',')[0] : 'Destino Selecionado');
+            // Prioridade: rua (road) > pedestre > praça > bairro > vila > display_name genérico
+            const name = addr.road || addr.pedestrian || addr.square || addr.hamlet || addr.village || addr.suburb || (data.display_name ? data.display_name.split(',')[0] : 'Destino Selecionado');
             socket.emit('set_destination', { lat, lng, name });
         })
         .catch(() => {
@@ -1030,6 +1032,7 @@ function updateUserOnMap(userId, user) {
         markers[userId] = marker;
     }
 }
+
 
 function removeUserFromMap(userId, socketId) {
     // Se o usuário saiu, mas temos um marcador com o mesmo userId,
