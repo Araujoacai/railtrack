@@ -17,11 +17,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RealTrack">
 
-        <!-- Android Auto Metadata -->
-        <meta-data
-            android:name="com.google.android.gms.car.application"
-            android:resource="@xml/automotive_app_desc" />
-
         <!-- Página Principal (WebView) -->
         <activity
             android:name=".MainActivity"
@@ -33,7 +28,13 @@
             </intent-filter>
         </activity>
 
-        <!-- Serviço de Navegação do Android Auto -->
+        <!--
+            Serviço de Navegação do Android Auto (Cars App Library)
+            IMPORTANTE:
+            - A action deve ser exatamente "androidx.car.app.CarAppService"
+            - A category define o tipo: NAVIGATION é obrigatória para apps de navegação
+            - O meta-data "androidx.car.app.minCarApiLevel" é OBRIGATÓRIO para o Android Auto reconhecer o app
+        -->
         <service
             android:name=".NavCarAppService"
             android:exported="true"
@@ -43,6 +44,10 @@
                 <action android:name="androidx.car.app.CarAppService" />
                 <category android:name="androidx.car.app.category.NAVIGATION" />
             </intent-filter>
+            <!-- Nível mínimo da API do carro (1 = suporte máximo de compatibilidade) -->
+            <meta-data
+                android:name="androidx.car.app.minCarApiLevel"
+                android:value="1" />
         </service>
 
     </application>
