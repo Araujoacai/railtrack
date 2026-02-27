@@ -38,8 +38,10 @@
 
         <!-- Código da sala -->
         <div class="room-code-box">
-            <div class="room-code-label">Código da sala</div>
-            <div class="room-code-value" id="roomCodeDisplay">------</div>
+            <div class="room-code-left">
+                <div class="room-code-label">Código da sala</div>
+                <div class="room-code-value" id="roomCodeDisplay">------</div>
+            </div>
             <button class="btn-copy" id="btnCopy" onclick="copyCode()">📋 Copiar</button>
         </div>
 
@@ -51,18 +53,15 @@
 
         <!-- Navegação (visível apenas para host) -->
         <div class="nav-section" id="navSection" style="display:none">
-            <div class="section-title">🧭 Navegação <span class="host-badge" id="hostBadge">Anfitrião</span></div>
+            <div class="section-title">🧭 Navegar <span class="host-badge" id="hostBadge">Anfitrião</span></div>
             <div class="nav-search-row">
-                <input type="text" id="destSearch" placeholder="Buscar endereço..." maxlength="200"
+                <input type="text" id="destSearch" placeholder="Para onde?" maxlength="200"
                     onkeydown="if(event.key==='Enter') searchDestination()" />
                 <button onclick="searchDestination()" title="Buscar">🔍</button>
             </div>
             <div class="nav-results" id="navResults" style="display:none"></div>
             <p class="hint" id="navHint">Ou <a href="#" onclick="enableMapClick(); return false;"
                     style="color:var(--accent);">clique no mapa</a> para definir o destino.</p>
-            <button class="btn-nav-clear" id="btnClearDest" onclick="clearDestination()" style="display:none">
-                ❌ Remover destino
-            </button>
         </div>
 
         <!-- Direções (todos veem quando há destino) -->
@@ -92,11 +91,11 @@
             </div>
         </div>
 
-        <!-- Botão calcular viagem -->
-        <button class="btn-fuel" onclick="openFuelModal()">⛽ Calcular Viagem</button>
-
-        <!-- Botão sair -->
-        <button class="btn-leave" onclick="leaveRoom()">🚪 Sair da sala</button>
+        <!-- Botões de ação -->
+        <div class="panel-actions">
+            <button class="btn-fuel" onclick="openFuelModal()">⛽ Calcular</button>
+            <button class="btn-leave" onclick="leaveRoom()">🚪 Sair</button>
+        </div>
     </div>
 
     <!-- ── Botão flutuante (painel recolhido) ── -->
