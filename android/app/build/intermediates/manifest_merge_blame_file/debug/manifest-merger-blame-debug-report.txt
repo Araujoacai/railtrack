@@ -1,0 +1,224 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.realtrack.app"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="34" />
+10
+11    <!-- Permissões Necessárias -->
+12    <uses-permission android:name="android.permission.INTERNET" />
+12-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:5:5-67
+12-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:5:22-64
+13    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+13-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:6:5-79
+13-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:6:22-76
+14    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+14-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:7:5-81
+14-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:7:22-78
+15    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+15-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:8:5-85
+15-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:8:22-82
+16    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+16-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:9:5-77
+16-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:9:22-74
+17    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+17-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:10:5-86
+17-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:10:22-83
+18
+19    <queries>
+19-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:23:5-28:15
+20        <provider
+20-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:24:9-27:43
+21            android:name="androidx.car.app.connection.provider"
+21-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:25:13-64
+22            android:authorities="androidx.car.app.connection" />
+22-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:26:13-62
+23    </queries>
+24
+25    <permission
+25-->[androidx.core:core:1.12.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\6d3b3cb1ee12db3b50f8898ca61e50cf\transformed\core-1.12.0\AndroidManifest.xml:22:5-24:47
+26        android:name="com.realtrack.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+26-->[androidx.core:core:1.12.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\6d3b3cb1ee12db3b50f8898ca61e50cf\transformed\core-1.12.0\AndroidManifest.xml:23:9-81
+27        android:protectionLevel="signature" />
+27-->[androidx.core:core:1.12.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\6d3b3cb1ee12db3b50f8898ca61e50cf\transformed\core-1.12.0\AndroidManifest.xml:24:9-44
+28
+29    <uses-permission android:name="com.realtrack.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+29-->[androidx.core:core:1.12.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\6d3b3cb1ee12db3b50f8898ca61e50cf\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
+29-->[androidx.core:core:1.12.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\6d3b3cb1ee12db3b50f8898ca61e50cf\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
+30
+31    <application
+31-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:12:5-48:19
+32        android:allowBackup="true"
+32-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:13:9-35
+33        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+33-->[androidx.core:core:1.12.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\6d3b3cb1ee12db3b50f8898ca61e50cf\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
+34        android:debuggable="true"
+35        android:extractNativeLibs="false"
+36        android:icon="@mipmap/ic_launcher"
+36-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:14:9-43
+37        android:label="@string/app_name"
+37-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:15:9-41
+38        android:roundIcon="@mipmap/ic_launcher_round"
+38-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:16:9-54
+39        android:supportsRtl="true"
+39-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:17:9-35
+40        android:testOnly="true"
+41        android:theme="@style/Theme.RealTrack" >
+41-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:18:9-47
+42
+43        <!-- Android Auto Metadata -->
+44        <meta-data
+44-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:21:9-23:59
+45            android:name="com.google.android.gms.car.application"
+45-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:22:13-66
+46            android:resource="@xml/automotive_app_desc" />
+46-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:23:13-56
+47
+48        <!-- Página Principal (WebView) -->
+49        <activity
+49-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:26:9-34:20
+50            android:name="com.realtrack.app.MainActivity"
+50-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:27:13-41
+51            android:exported="true"
+51-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:28:13-36
+52            android:theme="@style/Theme.RealTrack.NoActionBar" >
+52-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:29:13-63
+53            <intent-filter>
+53-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:30:13-33:29
+54                <action android:name="android.intent.action.MAIN" />
+54-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:31:17-69
+54-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:31:25-66
+55
+56                <category android:name="android.intent.category.LAUNCHER" />
+56-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:32:17-77
+56-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:32:27-74
+57            </intent-filter>
+58        </activity>
+59
+60        <!-- Serviço de Navegação do Android Auto -->
+61        <service
+61-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:37:9-46:19
+62            android:name="com.realtrack.app.NavCarAppService"
+62-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:38:13-45
+63            android:exported="true"
+63-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:39:13-36
+64            android:foregroundServiceType="location"
+64-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:41:13-53
+65            android:label="@string/app_name" >
+65-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:40:13-45
+66            <intent-filter>
+66-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:42:13-45:29
+67                <action android:name="androidx.car.app.CarAppService" />
+67-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:43:17-73
+67-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:43:25-70
+68
+69                <category android:name="androidx.car.app.category.NAVIGATION" />
+69-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:44:17-81
+69-->C:\Users\Gabriel\Downloads\rotas\android\app\src\main\AndroidManifest.xml:44:27-78
+70            </intent-filter>
+71        </service>
+72        <service
+72-->[androidx.car.app:app-projected:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\0a0ba599416de31b50859741380bb7cc\transformed\jetified-app-projected-1.4.0\AndroidManifest.xml:24:9-34:19
+73            android:name="androidx.car.app.CarAppMetadataHolderService"
+73-->[androidx.car.app:app-projected:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\0a0ba599416de31b50859741380bb7cc\transformed\jetified-app-projected-1.4.0\AndroidManifest.xml:25:13-72
+74            android:enabled="false"
+74-->[androidx.car.app:app-projected:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\0a0ba599416de31b50859741380bb7cc\transformed\jetified-app-projected-1.4.0\AndroidManifest.xml:26:13-36
+75            android:exported="false"
+75-->[androidx.car.app:app-projected:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\0a0ba599416de31b50859741380bb7cc\transformed\jetified-app-projected-1.4.0\AndroidManifest.xml:27:13-37
+76            android:process="" >
+76-->[androidx.car.app:app-projected:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\0a0ba599416de31b50859741380bb7cc\transformed\jetified-app-projected-1.4.0\AndroidManifest.xml:28:13-31
+77            <meta-data
+77-->[androidx.car.app:app-projected:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\0a0ba599416de31b50859741380bb7cc\transformed\jetified-app-projected-1.4.0\AndroidManifest.xml:31:13-33:89
+78                android:name="androidx.car.app.CarAppMetadataHolderService.CAR_HARDWARE_MANAGER"
+78-->[androidx.car.app:app-projected:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\0a0ba599416de31b50859741380bb7cc\transformed\jetified-app-projected-1.4.0\AndroidManifest.xml:32:17-97
+79                android:value="androidx.car.app.hardware.ProjectedCarHardwareManager" />
+79-->[androidx.car.app:app-projected:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\0a0ba599416de31b50859741380bb7cc\transformed\jetified-app-projected-1.4.0\AndroidManifest.xml:33:17-86
+80        </service>
+81
+82        <activity
+82-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:31:9-34:75
+83            android:name="androidx.car.app.CarAppPermissionActivity"
+83-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:32:13-69
+84            android:exported="false"
+84-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:33:13-37
+85            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+85-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:34:13-72
+86
+87        <receiver
+87-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:36:9-38:40
+88            android:name="androidx.car.app.notification.CarAppNotificationBroadcastReceiver"
+88-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:37:13-93
+89            android:exported="false" />
+89-->[androidx.car.app:app:1.4.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\a12dd7ffb65490cfbe76de3d3ef1d4e0\transformed\jetified-app-1.4.0\AndroidManifest.xml:38:13-37
+90
+91        <provider
+91-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\c91d850901c0fb6eb205d775e4ea10b3\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+92            android:name="androidx.startup.InitializationProvider"
+92-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\c91d850901c0fb6eb205d775e4ea10b3\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:25:13-67
+93            android:authorities="com.realtrack.app.androidx-startup"
+93-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\c91d850901c0fb6eb205d775e4ea10b3\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:26:13-68
+94            android:exported="false" >
+94-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\c91d850901c0fb6eb205d775e4ea10b3\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:27:13-37
+95            <meta-data
+95-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\c91d850901c0fb6eb205d775e4ea10b3\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+96                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+96-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\c91d850901c0fb6eb205d775e4ea10b3\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:30:17-75
+97                android:value="androidx.startup" />
+97-->[androidx.emoji2:emoji2:1.2.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\c91d850901c0fb6eb205d775e4ea10b3\transformed\jetified-emoji2-1.2.0\AndroidManifest.xml:31:17-49
+98            <meta-data
+98-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\13d4a73284a3332d75391e1414942161\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:29:13-31:52
+99                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+99-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\13d4a73284a3332d75391e1414942161\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:30:17-78
+100                android:value="androidx.startup" />
+100-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\13d4a73284a3332d75391e1414942161\transformed\jetified-lifecycle-process-2.6.1\AndroidManifest.xml:31:17-49
+101            <meta-data
+101-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
+102                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+102-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
+103                android:value="androidx.startup" />
+103-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
+104        </provider>
+105
+106        <receiver
+106-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
+107            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+107-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
+108            android:directBootAware="false"
+108-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
+109            android:enabled="true"
+109-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
+110            android:exported="true"
+110-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
+111            android:permission="android.permission.DUMP" >
+111-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
+112            <intent-filter>
+112-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
+113                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+113-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
+113-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
+114            </intent-filter>
+115            <intent-filter>
+115-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
+116                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+116-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
+116-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
+117            </intent-filter>
+118            <intent-filter>
+118-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
+119                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+119-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
+119-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
+120            </intent-filter>
+121            <intent-filter>
+121-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
+122                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+122-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
+122-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\Gabriel\.gradle\caches\9.0-milestone-1\transforms\041d7246436673b739b988636b32025c\transformed\jetified-profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
+123            </intent-filter>
+124        </receiver>
+125    </application>
+126
+127</manifest>

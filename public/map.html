@@ -67,7 +67,10 @@
 
         <!-- Direções (todos veem quando há destino) -->
         <div class="directions-section" id="directionsSection" style="display:none">
-            <div class="section-title">📋 Direções</div>
+            <div class="section-title">
+                📋 Direções
+                <button class="btn-cancel-dest" onclick="clearDestination()" title="Cancelar destino">✕</button>
+            </div>
             <div class="dest-info" id="destInfo"></div>
             <div class="directions-list" id="directionsList"></div>
         </div>
@@ -88,6 +91,9 @@
                 <button onclick="sendMessage()">➤</button>
             </div>
         </div>
+
+        <!-- Botão calcular viagem -->
+        <button class="btn-fuel" onclick="openFuelModal()">⛽ Calcular Viagem</button>
 
         <!-- Botão sair -->
         <button class="btn-leave" onclick="leaveRoom()">🚪 Sair da sala</button>
@@ -117,6 +123,61 @@
         🚗
     </button>
 
+
+    <!-- ── Modal de Cálculo de Viagem ── -->
+    <div class="fuel-modal-overlay hidden" id="fuelModal" onclick="if(event.target===this) closeFuelModal()">
+        <div class="fuel-modal-box">
+            <div class="fuel-modal-header">
+                <span>⛽ Calcular Viagem</span>
+                <button class="fuel-modal-close" onclick="closeFuelModal()">✕</button>
+            </div>
+
+            <div class="fuel-modal-route" id="fuelRouteInfo">
+                <span id="fuelRouteDist">-- km</span>
+                <span id="fuelRouteTolls">-- pedágios</span>
+            </div>
+
+            <div class="fuel-fields">
+                <div class="fuel-field-group">
+                    <label for="fuelPrice">Preço do combustível (R$/litro)</label>
+                    <input type="number" id="fuelPrice" min="0" step="0.01" placeholder="Ex: 6.50" />
+                </div>
+                <div class="fuel-field-group">
+                    <label for="fuelConsumption">Consumo do veículo (km/litro)</label>
+                    <input type="number" id="fuelConsumption" min="0" step="0.1" placeholder="Ex: 12.5" />
+                </div>
+                <div class="fuel-field-group">
+                    <label for="fuelTollValue">Valor estimado por pedágio (R$)</label>
+                    <input type="number" id="fuelTollValue" min="0" step="0.50" placeholder="Ex: 8.00" />
+                </div>
+            </div>
+
+            <button class="btn-fuel-calc" onclick="calculateFuelCost()">Calcular</button>
+
+            <div class="fuel-result" id="fuelResult" style="display:none">
+                <div class="fuel-result-grid">
+                    <div class="fuel-result-item">
+                        <span class="fuel-result-label">🛣️ Distância</span>
+                        <span class="fuel-result-value" id="resDistance">--</span>
+                    </div>
+                    <div class="fuel-result-item">
+                        <span class="fuel-result-label">⛽ Combustível</span>
+                        <span class="fuel-result-value" id="resFuel">--</span>
+                    </div>
+                    <div class="fuel-result-item">
+                        <span class="fuel-result-label">🚧 Pedágios</span>
+                        <span class="fuel-result-value" id="resTolls">--</span>
+                    </div>
+                    <div class="fuel-result-item fuel-result-total">
+                        <span class="fuel-result-label">💰 Total estimado</span>
+                        <span class="fuel-result-value" id="resTotal">--</span>
+                    </div>
+                </div>
+                <p class="fuel-disclaimer">* Pedágios são estimados pelos postos detectados próximos à rota. Valores
+                    reais podem variar.</p>
+            </div>
+        </div>
+    </div>
 
     <!-- ── Toast de notificações ── -->
     <div class="toast-container" id="toastContainer"></div>

@@ -1193,7 +1193,7 @@ body.drive-mode .drive-controls {
 
 /* Botão de alternar modo */
 .fab-drive-toggle {
-  bottom: 84px;
+  bottom: 160px;
   right: 24px;
   position: fixed;
   width: 56px;
@@ -1423,6 +1423,288 @@ body.drive-mode .fab-theme {
 }
 
 /* =============================================
+   BOTÃO CANCELAR DESTINO (X nas Direções)
+   ============================================= */
+
+.btn-cancel-dest {
+  margin-left: auto;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 8px;
+  color: var(--danger);
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-cancel-dest:hover {
+  background: rgba(255, 107, 107, 0.25);
+  transform: scale(1.1);
+}
+
+/* =============================================
+   BOTÃO COMBUSTÍVEL (Painel lateral)
+   ============================================= */
+
+.btn-fuel {
+  margin: 0 20px 8px;
+  padding: 11px;
+  background: rgba(0, 217, 255, 0.07);
+  border: 1px solid rgba(0, 217, 255, 0.25);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-fuel:hover {
+  background: rgba(0, 217, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+/* =============================================
+   MODAL DE CÁLCULO DE VIAGEM
+   ============================================= */
+
+.fuel-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(12px);
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeInOverlay 0.2s ease;
+}
+
+.fuel-modal-overlay.hidden {
+  display: none;
+}
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.fuel-modal-box {
+  background: rgba(10, 14, 26, 0.97);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  animation: slideUpModal 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUpModal {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.fuel-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #00D9FF, #B24BF3);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.fuel-modal-close {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-text-fill-color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fuel-modal-close:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
+}
+
+.fuel-modal-route {
+  display: flex;
+  gap: 12px;
+  background: rgba(0, 217, 255, 0.05);
+  border: 1px solid rgba(0, 217, 255, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.fuel-modal-route span::before {
+  content: '📌 ';
+}
+
+.fuel-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.fuel-field-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.fuel-field-group input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.fuel-field-group input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  background: rgba(0, 217, 255, 0.04);
+}
+
+.btn-fuel-calc {
+  width: 100%;
+  padding: 13px;
+  background: linear-gradient(135deg, #00D9FF, #B24BF3);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0, 217, 255, 0.3);
+}
+
+.btn-fuel-calc:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 217, 255, 0.45);
+}
+
+.btn-fuel-calc:active {
+  transform: translateY(0);
+}
+
+.fuel-result {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  animation: fadeInResult 0.3s ease;
+}
+
+@keyframes fadeInResult {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fuel-result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.fuel-result-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fuel-result-total {
+  grid-column: 1 / -1;
+  background: rgba(0, 217, 255, 0.07);
+  border-color: rgba(0, 217, 255, 0.25);
+}
+
+.fuel-result-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.fuel-result-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.fuel-result-total .fuel-result-value {
+  color: var(--accent);
+  font-size: 22px;
+}
+
+.fuel-disclaimer {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* =============================================
    TOMTOM – Radares e Pedágios
    ============================================= */
 
@@ -1451,7 +1733,7 @@ body.drive-mode .fab-theme {
 
 .fab-tomtom {
   position: fixed;
-  bottom: 72px;
+  bottom: 90px;
   right: 16px;
   z-index: 1000;
   background: rgba(10, 14, 26, 0.8);

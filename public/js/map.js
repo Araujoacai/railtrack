@@ -9,6 +9,7 @@ let destMarker = null;   // Marcador 🏁 do destino no mapa
 let watchId = null;
 let myLastLat = null, myLastLng = null;
 let lastRouteCalc = 0;
+let lastRouteDistanceMeters = 0; // Distância da rota ativa (metros)
 let gpsGranted = false;
 let wakeLock = null;
 let driveMode = false;
@@ -785,6 +786,7 @@ function drawRouteOnMap(coords) {
 }
 
 function updateRouteInfo(distanceMeters, durationSeconds) {
+    lastRouteDistanceMeters = distanceMeters; // Salvar para o modal de combustível
     const distKm = (distanceMeters / 1000).toFixed(1);
     const durMin = Math.ceil(durationSeconds / 60);
     const distEl = document.getElementById('destDistance');
@@ -1518,6 +1520,108 @@ function speakInstruction(text, distance) {
     utterance.pitch = 1.0;
 
     window.speechSynthesis.speak(utterance);
+}
+
+// ── Modal de Cálculo de Viagem (Combustível + Pedágios) ───────────────
+const FUEL_STORAGE_KEY = 'realtrack_fuel_prefs';
+
+function openFuelModal() {
+    const prefs = JSON.parse(localStorage.getItem(FUEL_STORAGE_KEY) || '{}');
+
+    // Preencher campos com valores salvos
+    const priceEl = document.getElementById('fuelPrice');
+    const consumeEl = document.getElementById('fuelConsumption');
+    const tollEl = document.getElementById('fuelTollValue');
+    if (priceEl) priceEl.value = prefs.price || '';
+    if (consumeEl) consumeEl.value = prefs.consumption || '';
+    if (tollEl) tollEl.value = prefs.tollValue || '';
+
+    // Atualizar informações de rota no modal
+    const distEl = document.getElementById('fuelRouteDist');
+    const tollsEl = document.getElementById('fuelRouteTolls');
+
+    if (lastRouteDistanceMeters > 0) {
+        const distKm = (lastRouteDistanceMeters / 1000).toFixed(1);
+        if (distEl) distEl.textContent = `${distKm} km de rota`;
+    } else {
+        if (distEl) distEl.textContent = 'Sem rota ativa';
+    }
+
+    const tollCount = countTollsAlongRoute();
+    if (tollsEl) tollsEl.textContent = `~${tollCount} pedágio${tollCount !== 1 ? 's' : ''} detectado${tollCount !== 1 ? 's' : ''}`;
+
+    // Esconder resultado anterior
+    const resultEl = document.getElementById('fuelResult');
+    if (resultEl) resultEl.style.display = 'none';
+
+    document.getElementById('fuelModal').classList.remove('hidden');
+}
+
+function closeFuelModal() {
+    document.getElementById('fuelModal').classList.add('hidden');
+}
+
+function calculateFuelCost() {
+    const price = parseFloat(document.getElementById('fuelPrice').value);
+    const consumption = parseFloat(document.getElementById('fuelConsumption').value);
+    const tollValue = parseFloat(document.getElementById('fuelTollValue').value) || 0;
+
+    if (!price || price <= 0 || !consumption || consumption <= 0) {
+        showToast('⚠️ Preencha preço e consumo corretamente.', 'error');
+        return;
+    }
+
+    if (lastRouteDistanceMeters <= 0) {
+        showToast('📍 Defina um destino primeiro para calcular.', 'info');
+        return;
+    }
+
+    // Salvar preferências no localStorage
+    localStorage.setItem(FUEL_STORAGE_KEY, JSON.stringify({ price, consumption, tollValue }));
+
+    const distKm = lastRouteDistanceMeters / 1000;
+    const liters = distKm / consumption;
+    const fuelCost = liters * price;
+
+    const tollCount = countTollsAlongRoute();
+    const tollCost = tollCount * tollValue;
+    const total = fuelCost + tollCost;
+
+    // Exibir resultado
+    document.getElementById('resDistance').textContent = `${distKm.toFixed(1)} km`;
+    document.getElementById('resFuel').textContent = `R$ ${fuelCost.toFixed(2)}`;
+    document.getElementById('resTolls').textContent = tollCount > 0
+        ? `R$ ${tollCost.toFixed(2)} (${tollCount}x)`
+        : `R$ 0,00`;
+    document.getElementById('resTotal').textContent = `R$ ${total.toFixed(2)}`;
+
+    const resultEl = document.getElementById('fuelResult');
+    if (resultEl) resultEl.style.display = '';
+}
+
+function countTollsAlongRoute() {
+    // Se não há rota ou marcadores de pedágio, retornar 0
+    if (!navRouteLine || !tollMarkers || tollMarkers.length === 0) return 0;
+
+    const routeLatLngs = navRouteLine.getLatLngs();
+    let count = 0;
+    const THRESHOLD_METERS = 300; // 300m de tolerância
+
+    tollMarkers.forEach(marker => {
+        const tollLatLng = marker.getLatLng();
+        // Verificar se este pedágio está próximo de algum segmento da rota
+        for (let i = 0; i < routeLatLngs.length - 1; i++) {
+            const dist = L.GeometryUtil
+                ? L.GeometryUtil.distanceSegment(map, tollLatLng, routeLatLngs[i], routeLatLngs[i + 1])
+                : tollLatLng.distanceTo(routeLatLngs[i]);
+            if (dist <= THRESHOLD_METERS) {
+                count++;
+                break; // Contar apenas uma vez por pedágio
+            }
+        }
+    });
+
+    return count;
 }
 
 // ── Inicialização ─────────────────────────────────────────────
