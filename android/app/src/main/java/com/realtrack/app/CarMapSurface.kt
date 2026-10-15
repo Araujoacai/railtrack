@@ -137,7 +137,7 @@ class CarMapSurface {
         if (!loadingTiles.add(key)) return
         executor.execute {
             try {
-                val connection = URL("https://a.basemaps.cartocdn.com/rastertiles/voyager/$zoom/$x/$y.png").openConnection() as HttpURLConnection
+                val connection = URL("https://tile.openstreetmap.org/$zoom/$x/$y.png").openConnection() as HttpURLConnection
                 connection.connectTimeout = 4000
                 connection.readTimeout = 5000
                 connection.setRequestProperty("User-Agent", "Railtrak-AndroidAuto/1.0")
@@ -192,7 +192,7 @@ class CarMapSurface {
             setShadowLayer(2f, 1f, 1f, Color.BLACK)
             textAlign = Paint.Align.RIGHT
         }
-        canvas.drawText("© OpenStreetMap © CARTO", width - 12f, height - 12f, paint)
+        canvas.drawText("© OpenStreetMap contributors", width - 12f, height - 12f, paint)
     }
 
     private fun project(point: CarCoordinate, zoom: Int): Pair<Double, Double> {

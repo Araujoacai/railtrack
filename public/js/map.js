@@ -230,9 +230,9 @@ function restartGPSWatch() {
 let tileLayer = null; // referência do tile para trocar no tema
 
 const TILES = {
-    dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    // Usando CartoDB Voyager para o tema claro: mais limpo e informativo que o OSM puro
-    light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    // CARTO now requires an API key; use the public OSM raster endpoint for both themes.
+    dark: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    light: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
 };
 let currentTheme = localStorage.getItem('rt_theme') || 'dark';
 
@@ -263,8 +263,7 @@ function initMap() {
 
     tileLayer = L.tileLayer(TILES[currentTheme], {
         maxZoom: 19,
-        subdomains: 'abcd', // CartoDB suporta abcd
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
     // Aplicar tema salvo na inicialização
@@ -622,12 +621,13 @@ function onLocationSuccess(pos) {
 
 function onLocationError(err) {
     const msgs = {
-        1: '❌ Permissão de GPS negada',
+        1: '❌ GPS bloqueado · libere Localização nas permissões do site',
         2: '❌ Posição indisponível',
         3: '⏱️ Timeout do GPS',
     };
     setGPSStatus('error', msgs[err.code] || '❌ Erro de GPS');
-    showToast(`GPS: ${msgs[err.code]}`, 'error');
+    const help = err.code === 1 ? 'No Chrome, abra as permissões do site pelo ícone ao lado do endereço, permita Localização e recarregue a página.' : '';
+    showToast(`GPS: ${msgs[err.code]}${help ? ` ${help}` : ''}`, 'error');
 }
 
 function setGPSStatus(state, text) {

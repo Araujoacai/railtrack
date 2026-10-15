@@ -50,8 +50,8 @@ app.use(helmet({
             scriptSrcAttr: ["'unsafe-inline'"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
-            imgSrc: ["'self'", "https://*.basemaps.cartocdn.com", "data:"],
-            connectSrc: ["'self'", "wss:", "ws:", "https://router.project-osrm.org", "https://nominatim.openstreetmap.org", "https://overpass-api.de", "https://overpass.kumi.systems", "https://unpkg.com", "https://*.basemaps.cartocdn.com", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "https://tile.openstreetmap.org", "data:"],
+            connectSrc: ["'self'", "wss:", "ws:", "https://router.project-osrm.org", "https://nominatim.openstreetmap.org", "https://overpass-api.de", "https://overpass.kumi.systems", "https://unpkg.com", "https://tile.openstreetmap.org", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
         },
     },
 }));
