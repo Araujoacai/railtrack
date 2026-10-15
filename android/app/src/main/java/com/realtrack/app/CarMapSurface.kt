@@ -140,7 +140,7 @@ class CarMapSurface {
                 val connection = URL("https://tile.openstreetmap.org/$zoom/$x/$y.png").openConnection() as HttpURLConnection
                 connection.connectTimeout = 4000
                 connection.readTimeout = 5000
-                connection.setRequestProperty("User-Agent", "Railtrak-AndroidAuto/1.0")
+                connection.setRequestProperty("User-Agent", "Railtrak-AndroidAuto/1.0 (+https://railtrack-kifj.onrender.com)")
                 connection.inputStream.use { input ->
                     BitmapFactory.decodeStream(input)?.let { bitmap ->
                         synchronized(tileCache) { tileCache[key] = bitmap }

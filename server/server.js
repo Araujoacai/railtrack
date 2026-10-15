@@ -43,6 +43,7 @@ const roomManager = new RoomManager();
 
 // ── Helmet – headers de segurança HTTP ───────────────────────
 app.use(helmet({
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
