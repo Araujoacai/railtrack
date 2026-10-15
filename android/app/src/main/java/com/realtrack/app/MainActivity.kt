@@ -47,6 +47,9 @@ class MainActivity : AppCompatActivity() {
             allowContentAccess = true
         }
 
+        // The native car screen consumes the same room and route state as this page.
+        webView.addJavascriptInterface(AndroidAutoBridge(), "AndroidAutoBridge")
+
         webView.webViewClient = WebViewClient()
 
         // Suporte para Permissão de GPS dentro da WebView
@@ -59,9 +62,6 @@ class MainActivity : AppCompatActivity() {
                 callback?.invoke(origin, true, false)
             }
         }
-
-        // Inicia conexão via Socket nativa para sincronizar com Android Auto
-        SocketManager.connect()
 
         // Carrega o seu projeto oficial no Render
         webView.loadUrl("https://railtrack-kifj.onrender.com/") 

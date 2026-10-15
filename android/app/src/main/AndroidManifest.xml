@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="androidx.car.app.NAVIGATION_TEMPLATES" />
+    <uses-permission android:name="androidx.car.app.ACCESS_SURFACE" />
 
     <application
         android:allowBackup="true"
@@ -16,6 +18,13 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.RealTrack">
+
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
 
         <!-- Página Principal (WebView) -->
         <activity
@@ -38,16 +47,11 @@
         <service
             android:name=".NavCarAppService"
             android:exported="true"
-            android:label="@string/app_name"
-            android:foregroundServiceType="location">
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
                 <category android:name="androidx.car.app.category.NAVIGATION" />
             </intent-filter>
-            <!-- Nível mínimo da API do carro (1 = suporte máximo de compatibilidade) -->
-            <meta-data
-                android:name="androidx.car.app.minCarApiLevel"
-                android:value="1" />
         </service>
 
     </application>

@@ -450,12 +450,14 @@ function initSocket() {
     // Destino definido
     socket.on('destination_set', (dest) => {
         destination = dest;
+        window.AndroidAutoBridge?.onDestination(dest.name || 'Destino', Number(dest.lat), Number(dest.lng));
         showDestinationOnMap(dest);
         showToast(`📌 Destino definido: ${dest.name}`, 'success');
 
         // Calcular rota se temos localização
         if (myLastLat !== null) {
             calculateRoute(myLastLat, myLastLng, dest.lat, dest.lng);
+            if (!isNavigating) startNavigation();
         }
     });
 
@@ -511,6 +513,9 @@ function onRoomReady(users, dest) {
     if (dest) {
         destination = dest;
         showDestinationOnMap(dest);
+        window.AndroidAutoBridge?.onDestination(dest.name || 'Destino', Number(dest.lat), Number(dest.lng));
+    } else {
+        window.AndroidAutoBridge?.onDestinationCleared();
     }
 
     // Tentar ativar GPS automaticamente se já tiver permissão
@@ -589,6 +594,7 @@ function onLocationSuccess(pos) {
 
     myLastLat = lat;
     myLastLng = lng;
+    window.AndroidAutoBridge?.onLocation(lat, lng, Number.isFinite(heading) ? heading : -1);
 
     socket.emit('update_location', { lat, lng, accuracy, heading, speed });
 
@@ -638,6 +644,7 @@ function setGPSStatus(state, text) {
 // ── Controle de Navegação ────────────────────────────────────
 function startNavigation() {
     isNavigating = true;
+    window.AndroidAutoBridge?.setNavigating(true);
     SmartCamera.enable();
 
     if (myLastLat && myLastLng) {
@@ -649,6 +656,7 @@ function startNavigation() {
 
 function stopNavigation() {
     isNavigating = false;
+    window.AndroidAutoBridge?.setNavigating(false);
 }
 
 function updateFollowButtonUI() {
@@ -749,6 +757,7 @@ async function calculateRoute(fromLat, fromLng, toLat, toLng) {
                 drawRouteOnMap(coords);
                 updateRouteInfo(summary.distance, summary.duration);
                 renderDirections(steps, 'ors');
+                publishAndroidAutoRoute(coords, summary.distance, summary.duration, steps[0], 'ors');
                 return;
             }
         } catch (err) {
@@ -768,9 +777,45 @@ async function calculateRoute(fromLat, fromLng, toLat, toLng) {
             drawRouteOnMap(coords);
             updateRouteInfo(route.distance, route.duration);
             renderDirections(route.legs[0].steps, 'osrm');
+            publishAndroidAutoRoute(coords, route.distance, route.duration, route.legs[0].steps[0], 'osrm');
         }
     } catch (err) {
         console.error('Erro crítica no roteamento:', err);
+    }
+}
+
+function publishAndroidAutoRoute(coords, distanceMeters, durationSeconds, firstStep, provider) {
+    if (!window.AndroidAutoBridge || !firstStep) return;
+    const instruction = provider === 'ors' ? firstStep.instruction : translateInstruction(firstStep);
+    const maneuverText = provider === 'ors'
+        ? String(firstStep.instruction || '')
+        : `${firstStep.maneuver?.type || ''} ${firstStep.maneuver?.modifier || ''}`;
+    const text = maneuverText.toLowerCase();
+    let maneuverType = 36; // Maneuver.TYPE_STRAIGHT
+    if (text.includes('depart') || text.includes('start')) maneuverType = 1;
+    else if (text.includes('arrive') || text.includes('destination')) maneuverType = 39;
+    else if (text.includes('roundabout') || text.includes('rotary')) maneuverType = 43;
+    else if (text.includes('uturn') || text.includes('u-turn')) maneuverType = text.includes('right') ? 12 : 11;
+    else if (text.includes('sharp') && text.includes('left')) maneuverType = 9;
+    else if (text.includes('sharp') && text.includes('right')) maneuverType = 10;
+    else if (text.includes('slight') && text.includes('left')) maneuverType = 5;
+    else if (text.includes('slight') && text.includes('right')) maneuverType = 6;
+    else if (text.includes('left')) maneuverType = 7;
+    else if (text.includes('right')) maneuverType = 8;
+
+    const payload = {
+        points: coords.slice(0, 3000).map(([lat, lng]) => ({ lat, lng })),
+        distanceMeters,
+        durationSeconds,
+        instruction,
+        instructionDistanceMeters: firstStep.distance || 0,
+        maneuverType,
+        navigating: isNavigating,
+    };
+    try {
+        window.AndroidAutoBridge.onRoute(JSON.stringify(payload));
+    } catch (error) {
+        console.warn('Não foi possível atualizar o mapa do Android Auto:', error);
     }
 }
 
@@ -921,7 +966,9 @@ function showDestinationOnMap(dest) {
 }
 
 function clearDestinationUI() {
+    stopNavigation();
     destination = null;
+    window.AndroidAutoBridge?.onDestinationCleared();
     if (navRouteLine) { map.removeLayer(navRouteLine); navRouteLine = null; }
     if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
 
